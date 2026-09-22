@@ -1,4 +1,5 @@
 import logging
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -10,24 +11,25 @@ from telegram.ext import (
     filters,
 )
 
-# Admin Telegram usernamesi va ID o'zgaruvchisi
+# Admin ma'lumotlari
 ADMIN_USERNAME = "@bukhara05"
-# Eslatma: Adminning haqiqiy numeric ID sini bilganingizdan so'ng ushbu o'zgaruvchiga yozing (masalan: 123456789)
-ADMIN_ID = None  
+ADMIN_ID = 6935366567
 
 # Conversation bosqichlari
 SELECT_TYPE, GET_DETAILS, GET_FILE, CONFIRM_PAYMENT, ADMIN_SEND_WORK = range(5)
 
 # Karta ma'lumotlari
-CARD_NUMBER = "8600123456789012"  # Bu yerga o'z karta raqamingizni yozing
-CARD_HOLDER = "F.I.SH"             # Karta egasining ismi-sharifi
+CARD_DATA = {
+    "number": "Biriktirilmagan",
+    "holder": "Biriktirilmagan"
+}
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start buyrug'i berilganda bosh menyuni chiqarish"""
+    """Start buyrug'i"""
     keyboard = [
         [InlineKeyboardButton("📚 Kurs ishi", callback_data="type_Kurs ishi")],
         [InlineKeyboardButton("📝 Mustaqil ish", callback_data="type_Mustaqil ish")],
@@ -46,7 +48,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SELECT_TYPE
 
 async def type_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Topshiriq turi tanlanganda"""
     query = update.callback_query
     await query.answer()
     
@@ -65,14 +66,13 @@ async def type_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return GET_DETAILS
 
 async def get_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mijozdan topshiriq ma'lumotlarini qabul qilish"""
     context.user_data["details"] = update.message.text
     
     keyboard = [[InlineKeyboardButton("⏭ Faylsiz davom etish", callback_data="skip_file")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
-        "Mavzuga oid fayl, metodichka yoki qo'shimcha resurs bo'lsa yuboring (fayl yoki rasm formatida).\n"
+        "Mavzuga oid fayl, metodichka yoki qo'shimcha resurs bo'lsa yuboring.\n"
         "Agar fayl bo'lmasa, **'Faylsiz davom etish'** tugmasini bosing:",
         reply_markup=reply_markup,
         parse_mode="Markdown"
@@ -80,7 +80,6 @@ async def get_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return GET_FILE
 
 async def get_file_and_show_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Faylni qabul qilish va to'lov rekvizitlarini ko'rsatish"""
     if update.message:
         if update.message.document:
             context.user_data["file_id"] = update.message.document.file_id
@@ -89,11 +88,10 @@ async def get_file_and_show_payment(update: Update, context: ContextTypes.DEFAUL
             context.user_data["file_id"] = update.message.photo[-1].file_id
             context.user_data["file_type"] = "photo"
     
-    # To'lov ma'lumotlarini chiqarish (Karta raqami copy bo'ladigan formatda)
     msg = (
         "💳 **To'lov rekvizitlari:**\n\n"
-        f"Karta raqami: `{CARD_NUMBER}` *(nusxa olish uchun ustiga bosing)*\n"
-        f"Egalik qiluvchi: **{CARD_HOLDER}**\n\n"
+        f"Karta raqami: `{CARD_DATA['number']}` *(nusxa olish uchun ustiga bosing)*\n"
+        f"Egalik qiluvchi: **{CARD_DATA['holder']}**\n\n"
         "To'lovni amalga oshirgach, **to'lov chekini (rasm yoki skrinshot)** shu yerga yuboring."
     )
     
@@ -106,7 +104,6 @@ async def get_file_and_show_payment(update: Update, context: ContextTypes.DEFAUL
     return CONFIRM_PAYMENT
 
 async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """To'lov chekini qabul qilish va Adminga avtomatik yuborish"""
     user = update.effective_user
     receipt_photo_id = update.message.photo[-1].file_id if update.message.photo else None
     
@@ -121,7 +118,6 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-    # Admin uchun xabar shakllantirish
     admin_text = (
         f"📥 **YANGI BUYURTMA!**\n\n"
         f"👤 **Mijoz:** [{user.full_name}](tg://user?id={user.id})\n"
@@ -131,77 +127,115 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📝 **Batafsil:** {context.user_data.get('details')}\n"
     )
 
-    # Adminga yozish (agar ADMIN_ID kiritilgan bo'lsa)
-    target_chat = ADMIN_ID if ADMIN_ID else ADMIN_USERNAME
-
-    # 1. Chekni va matnni yuborish
+    # Adminga buyurtma va chekni yuborish
     await context.bot.send_photo(
-        chat_id=target_chat,
+        chat_id=ADMIN_ID,
         photo=receipt_photo_id,
         caption=admin_text,
         parse_mode="Markdown"
     )
 
-    # 2. Qo'shimcha topshiriq fayli bo'lsa, uni ham yuborish
     if "file_id" in context.user_data:
         ftype = context.user_data["file_type"]
         if ftype == "document":
-            await context.bot.send_document(chat_id=target_chat, document=context.user_data["file_id"], caption="📎 Topshiriq fayli")
+            await context.bot.send_document(chat_id=ADMIN_ID, document=context.user_data["file_id"], caption="📎 Topshiriq fayli")
         elif ftype == "photo":
-            await context.bot.send_photo(chat_id=target_chat, photo=context.user_data["file_id"], caption="📎 Topshiriq rasmi")
+            await context.bot.send_photo(chat_id=ADMIN_ID, photo=context.user_data["file_id"], caption="📎 Topshiriq rasmi")
 
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Jarayonni bekor qilish"""
     await update.message.reply_text("Buyurtma berish bekor qilindi.")
     return ConversationHandler.END
 
-# --- ADMIN BO'LIMI: Tayyor ishni mijozga yetkazish ---
-async def send_work_to_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin buyrug'i: /send CLIENT_ID"""
-    user_id = update.effective_user.id
+# --- AVTOMATIK ALOQA BO'LIMI ---
+
+async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mijoz yozgan har qanday xabarni adminga avtomatik yetkazish"""
+    user = update.effective_user
     
-    # Faqat admin ishlata olishi uchun (ADMIN_ID sozlanganda)
-    if ADMIN_ID and user_id != ADMIN_ID:
+    # Agar xabar admindan bo'lsa, ushlab qolmaymiz
+    if user.id == ADMIN_ID:
+        return
+
+    # Adminga foydalanuvchi xabarini avtomatik uzatish (Forward)
+    forwarded_msg = await update.message.forward(chat_id=ADMIN_ID)
+    
+    # Adminga kimdan kelganini bildirish uchun eslatma
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"👆 **Yangi xabar!**\nMijoz ID: `{user.id}`\nJavob berish uchun ushbu xabarga **Reply (Javob berish)** qiling.",
+        parse_mode="Markdown",
+        reply_to_message_id=forwarded_msg.message_id
+    )
+
+async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin reply qilganda mijozga javobni qaytarish"""
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    # Admin xabarga Reply qilganini tekshirish
+    if update.message.reply_to_message:
+        reply_msg = update.message.reply_to_message
+        
+        # Original xabar egasining ID-sini topish
+        if reply_msg.forward_from:
+            target_user_id = reply_msg.forward_from.id
+        else:
+            # Agar foydalanuvchi konfidentsiallik sabab ID-sini berkitgan bo'lsa
+            await update.message.reply_text("⚠️ Mijoz profili shaxsiy sozlamalar sababli yopiq. Foydalanuvchiga `/send ID` buyrug'i orqali yozing.")
+            return
+
+        try:
+            await update.message.copy(chat_id=target_user_id)
+            await update.message.reply_text("✅ Javobingiz mijozga yetkazildi!")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Xatolik yuz berdi: {e}")
+
+# --- ADMIN BUYRUQLARI ---
+
+async def set_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin karta o'zgartirishi uchun"""
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    if len(context.args) < 2:
+        await update.message.reply_text("To'g'ri shakl: `/setcard KARTA_RAQAM ISMI`", parse_mode="Markdown")
+        return
+
+    CARD_DATA["number"] = context.args[0]
+    CARD_DATA["holder"] = " ".join(context.args[1:])
+
+    await update.message.reply_text(f"✅ Karta yangilandi:\n`{CARD_DATA['number']}` - **{CARD_DATA['holder']}**", parse_mode="Markdown")
+
+async def send_work_to_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin qo'lda ID orqali fayl/matn yuborishi uchun"""
+    if update.effective_user.id != ADMIN_ID:
         return
 
     if not context.args:
-        await update.message.reply_text(
-            "⚠️ **Xatolik!** Mijoz ID si ko'rsatilmadi.\n\n"
-            "**Foydalanish:** `/send CLIENT_ID` (masalan: `/send 123456789`)\n"
-            "Keyin tayyor faylni yuborasiz.",
-            parse_mode="Markdown"
-        )
+        await update.message.reply_text("Foydalanish: `/send CLIENT_ID`", parse_mode="Markdown")
         return
 
     context.user_data["target_client_id"] = context.args[0]
-    await update.message.reply_text(
-        f"📤 ID: `{context.args[0]}` bo'lgan mijozga tayyor ishni yuboring (fayl, rasm yoki matn shaklida):",
-        parse_mode="Markdown"
-    )
+    await update.message.reply_text(f"📤 ID: `{context.args[0]}` bo'lgan mijozga fayl yoki xabaringizni yuboring:")
     return ADMIN_SEND_WORK
 
 async def forward_work_to_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin yuborgan fayl yoki xabarni mijozga yetkazish"""
     client_id = context.user_data.get("target_client_id")
-    
     try:
-        await context.bot.send_message(
-            chat_id=client_id,
-            text="✅ **Sizning buyurtmangiz tayyor bo'ldi!**\nQuyida tayyor topshiriqni yuklab olishingiz mumkin:"
-        )
         await update.message.copy(chat_id=client_id)
-        await update.message.reply_text("✅ Tayyor ish mijozga muvaffaqiyatli yetkazildi!")
+        await update.message.reply_text("✅ Xabar mijozga yetkazildi!")
     except Exception as e:
-        await update.message.reply_text(f"❌ Xatolik yuz berdi: {e}")
-
+        await update.message.reply_text(f"❌ Xatolik: {e}")
     return ConversationHandler.END
 
 def main():
-    BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"  # BotFather'dan olingan token kiritiladi
-    
+    BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Admin buyruqlari
+    app.add_handler(CommandHandler("setcard", set_card))
 
     conv_handler = ConversationHandler(
         entry_points=[
@@ -222,6 +256,11 @@ def main():
     )
 
     app.add_handler(conv_handler)
+
+    # Avtomatik bog'lanish ishlovchilari
+    app.add_handler(MessageHandler(filters.REPLY & filters.User(ADMIN_ID), handle_admin_reply))
+    app.add_handler(MessageHandler(~filters.COMMAND & ~filters.User(ADMIN_ID), handle_user_messages))
+
     print("Bot ishga tushdi...")
     app.run_polling()
 
