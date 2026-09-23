@@ -30,8 +30,9 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-ADMIN_USERNAME = "@bukhara05"
-ADMIN_ID = 6935366567
+# YANGI ADMIN MA'LUMOTLARI
+ADMIN_USERNAME = "@ttmg_2024"
+ADMIN_ID = 6935366567  # Agar ID ham o'zgargan bo'lsa, yangi ID raqamini kiriting
 
 # Bot holatlari (States)
 SELECT_TYPE, GET_DETAILS, GET_FILE, CONFIRM_PAYMENT, SET_CARD_STATE = range(5)
@@ -152,7 +153,7 @@ async def save_new_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text.strip().split(maxsplit=1)
     if len(text) < 2:
-        await update.message.reply_text("❌ Noto'g me'morchilik! Iltimos, karta raqami va ismini birga yuboring.\nMasalan: `8600123456789012 BAXODIR JUMAYEV`", parse_mode="Markdown")
+        await update.message.reply_text("❌ Noto'g'ri format! Iltimos, karta raqami va ismini birga yuboring.\nMasalan: `8600123456789012 BAXODIR JUMAYEV`", parse_mode="Markdown")
         return SET_CARD_STATE
 
     CARD_DATA["number"] = text[0]
@@ -332,3 +333,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
