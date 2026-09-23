@@ -32,7 +32,7 @@ logging.basicConfig(
 
 # YANGI ADMIN MA'LUMOTLARI
 ADMIN_USERNAME = "@ttmg_2024"
-ADMIN_ID = 6935366567  # Agar ID ham o'zgargan bo'lsa, yangi ID raqamini kiriting
+ADMIN_ID = 6935366567
 
 # Bot holatlari (States)
 SELECT_TYPE, GET_DETAILS, GET_FILE, CONFIRM_PAYMENT, SET_CARD_STATE = range(5)
@@ -333,4 +333,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+        
