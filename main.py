@@ -1,6 +1,6 @@
 import logging
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -11,7 +11,7 @@ from telegram.ext import (
     filters,
 )
 
-# Logging (Serverda xatoliklarni ko'rish uchun)
+# Serverda xatoliklarni kuzatish uchun loglar
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
@@ -27,7 +27,7 @@ CARD_DATA = {
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start buyrug'i bosilganda ishlaydi"""
+    """Start buyrug'i bosilganda pastdagi tugmalarni olib tashlaydi"""
     keyboard = [
         [InlineKeyboardButton("📚 Kurs ishi", callback_data="type_Kurs ishi")],
         [InlineKeyboardButton("📝 Mustaqil ish", callback_data="type_Mustaqil ish")],
@@ -36,6 +36,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    # Pastdagi tugmalarni olib tashlash uchun vaqtincha ReplyKeyboardRemove ishlatamiz
+    remove_keyboard = ReplyKeyboardRemove()
+    await update.message.reply_text("...", reply_markup=remove_keyboard)
+    
+    # Asosiy xabar
     await update.message.reply_text(
         "👋 **Xush kelibsiz!**\n\n"
         "Men orqali kurs ishlari, mustaqil ishlar va boshqa topshiriqlarga buyurtma berishingiz mumkin.\n"
@@ -105,7 +110,7 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Iltimos, to'lov chekini rasm ko'rinishida yuboring.")
         return CONFIRM_PAYMENT
 
-    await update.message.reply_text("🎉 **Buyurtmangiz qabul qilindi!** Admin siz bilan bog'lanadi.")
+    await update.message.reply_text("🎉 Buyurtma qabul qilindi\nAdmin siz bilan bogʻlanadi")
 
     admin_text = (
         f"📥 **YANGI BUYURTMA!**\n\n"
@@ -120,14 +125,14 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "file_id" in context.user_data:
         ftype = context.user_data["file_type"]
         if ftype == "document":
-            await context.bot.send_document(chat_id=ADMIN_ID, document=context.user_data["file_id"], caption="📎 Fayl")
+            await context.bot.send_document(chat_id=ADMIN_ID, document=context.user_data["file_id"], caption="📎 Topshiriq fayli")
         elif ftype == "photo":
-            await context.bot.send_photo(chat_id=ADMIN_ID, photo=context.user_data["file_id"], caption="📎 Rasm")
+            await context.bot.send_photo(chat_id=ADMIN_ID, photo=context.user_data["file_id"], caption="📎 Topshiriq rasmi")
 
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Buyurtma bekor qilindi.")
+    await update.message.reply_text("Buyurtma bekor qilindi.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -138,7 +143,7 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
     forwarded_msg = await update.message.forward(chat_id=ADMIN_ID)
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"👆 Mijoz ID: `{user.id}`\nJavob berish uchun ushbu xabarga **Reply** qiling.",
+        text=f"👆 Mijoz ID: `{user.id}`\nJavob berish uchun ushbu xabarga **Reply (Javob berish)** qiling.",
         parse_mode="Markdown",
         reply_to_message_id=forwarded_msg.message_id
     )
@@ -170,7 +175,7 @@ async def set_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     BOT_TOKEN = os.getenv("BOT_TOKEN")
     if not BOT_TOKEN:
-        print("XatoliK: BOT_TOKEN topilmadi!")
+        print("Xatolik: BOT_TOKEN topilmadi!")
         return
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
