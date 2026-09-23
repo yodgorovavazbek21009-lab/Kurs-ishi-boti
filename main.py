@@ -30,7 +30,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-# ADMIN MA'LUMOTLARI (@ttmg_2024 uchun to'g'rilangan ID)
+# ADMIN MA'LUMOTLARI
 ADMIN_USERNAME = "@ttmg_2024"
 ADMIN_ID = 7323566567
 
@@ -60,7 +60,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     
-    # Username orqali ham, ID orqali ham adminlikni tekshirish
     if user_id == ADMIN_ID or (user.username and user.username.lower() == "ttmg_2024"):
         await update.message.reply_text(
             "👑 **Xush kelibsiz, Admin!**\n\n"
@@ -70,7 +69,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ConversationHandler.END
 
-    # Oddiy foydalanuvchilar uchun menyu
     keyboard = [
         [InlineKeyboardButton("📚 Kurs ishi", callback_data="type_Kurs ishi")],
         [InlineKeyboardButton("📝 Mustaqil ish", callback_data="type_Mustaqil ish")],
@@ -251,6 +249,7 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Iltimos, to'lov chekini rasm ko'rinishida yuboring.")
         return CONFIRM_PAYMENT
 
+    # Mijozga boradigan xabar
     await update.message.reply_text("🎉 Buyurtma qabul qilindi\nAdmin siz bilan bogʻlanadi")
 
     ORDERS_LIST.append({
@@ -266,7 +265,7 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🆔 **Mijoz ID:** `{user.id}`\n"
         f"📌 **Turi:** {context.user_data.get('work_type')}\n"
         f"📝 **Batafsil:** {context.user_data.get('details')}\n\n"
-        f"💬 **Mijozga javob yozish yoki fayl/PDF yuborish uchun ushbu xabarga Reply (Javob berish) qiling.**"
+        f"💬 **Mijozga fayl, PDF, rasm yoki tayyor ishni yuborish uchun ushbu xabarga Reply (Javob berish) qilib yuboring.**"
     )
 
     await context.bot.send_photo(chat_id=ADMIN_ID, photo=receipt_photo_id, caption=admin_text, parse_mode="Markdown")
@@ -293,12 +292,12 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
     forwarded_msg = await update.message.forward(chat_id=ADMIN_ID)
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"👆 Mijoz ID: `{user.id}`\nJavob berish yoki fayl yuborish uchun ushbu xabarga **Reply (Javob berish)** qiling.",
+        text=f"👆 Mijoz ID: `{user.id}`\nJavob berish yoki fayl/PDF yuborish uchun ushbu xabarga **Reply (Javob berish)** qiling.",
         parse_mode="Markdown",
         reply_to_message_id=forwarded_msg.message_id
     )
 
-# --- ADMINDAN MIJOZGA MATN VA BARCHA FAYLLARNI YUBORISH ---
+# --- ADMINDAN MIJOZGA FAYL, PDF, RASM VA MATNLARNI YUBORISH ---
 async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID and (not user.username or user.username.lower() != "ttmg_2024"):
@@ -320,12 +319,13 @@ async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         if target_user_id:
             try:
+                # Barcha turdagi fayllarni (PDF, rasm, Word, audio, video) va matnlarni mijozga yetkazadi
                 await update.message.copy(chat_id=target_user_id)
-                await update.message.reply_text("✅ Javobingiz va faylingiz mijozga yetkazildi!")
+                await update.message.reply_text("✅ Fayl/xabaringiz mijozga muvaffaqiyatli yetkazildi!")
             except Exception as e:
                 await update.message.reply_text(f"❌ Xatolik yuz berdi: {e}")
         else:
-            await update.message.reply_text("⚠️ Mijoz ID si aniqlanmadi. Iltimos, mijozdan kelgan xabarga Reply qiling.")
+            await update.message.reply_text("⚠️ Mijoz ID si aniqlanmadi. Iltimos, mijoz kelgan xabarga Reply qiling.")
 
 def main():
     BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -368,7 +368,10 @@ def main():
     app.add_handler(CallbackQueryHandler(admin_callback, pattern="^(admin_|change_card_)"))
     app.add_handler(conv_handler)
     
+    # Admindan chiqadigan har qanday Reply fayllar (PDF, rasm, Word, va hokazo) uchun handler
     app.add_handler(MessageHandler(filters.REPLY & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), handle_admin_reply))
+    
+    # Foydalanuvchilar xabariga handler
     app.add_handler(MessageHandler(~filters.COMMAND & ~(filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), handle_user_messages))
 
     print("Bot muvaffaqiyatli ishga tushdi!")
@@ -376,3 +379,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
