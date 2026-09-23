@@ -3,7 +3,7 @@ import os
 from threading import Thread
 from flask import Flask
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -14,7 +14,7 @@ from telegram.ext import (
     filters,
 )
 
-# Render & UptimeRobot uchun veb-server (Flask)
+# Render & UptimeRobot для веб-сервера (Flask)
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -30,20 +30,20 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-# YANGI ADMIN MA'LUMOTLARI
+# ДАННЫЕ АДМИНИСТРАТОРА
 ADMIN_USERNAME = "@ttmg_2024"
 ADMIN_ID = 6935366567
 
-# Bot holatlari (States)
+# Состояния бота (States)
 SELECT_TYPE, GET_DETAILS, GET_FILE, CONFIRM_PAYMENT, SET_CARD_STATE = range(5)
 
-# Karta ma'lumotlari xotirada saqlanadi
+# Данные карты хранятся в памяти
 CARD_DATA = {
     "number": "Biriktirilmagan",
     "holder": "Biriktirilmagan"
 }
 
-# --- ADMIN MENYUSI TUGMALARI ---
+# --- КНОПКИ МЕНЮ АДМИНИСТРАТОРА ---
 def get_admin_keyboard():
     keyboard = [
         [InlineKeyboardButton("💳 Kartani ko'rish / o'zgartirish", callback_data="admin_card_menu")],
@@ -51,11 +51,11 @@ def get_admin_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# --- FOYDALANUVCHILAR UCHUN START ---
+# --- START ДЛЯ ПОЛЬЗОВАТЕЛЕЙ ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
-    # Agar admin /start bossa, buyurtma berish emas, Admin paneli ochiladi
+    # Если админ нажимает /start, открывается панель администратора
     if user_id == ADMIN_ID:
         await update.message.reply_text(
             "👑 **Xush kelibsiz, Admin!**\n\n"
@@ -65,7 +65,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ConversationHandler.END
 
-    # Oddiy foydalanuvchilar uchun menyu
+    # Меню для обычных пользователей
     keyboard = [
         [InlineKeyboardButton("📚 Kurs ishi", callback_data="type_Kurs ishi")],
         [InlineKeyboardButton("📝 Mustaqil ish", callback_data="type_Mustaqil ish")],
@@ -74,10 +74,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Eski reply-tugmalarni tozalash
-    remove_keyboard = ReplyKeyboardRemove()
-    await update.message.reply_text("...", reply_markup=remove_keyboard)
-    
+    # Отправка приветствия сразу без промежуточного сообщения "..."
     await update.message.reply_text(
         "👋 **Xush kelibsiz!**\n\n"
         "Men orqali kurs ishlari, mustaqil ishlar va boshqa topshiriqlarga buyurtma berishingiz mumkin.\n"
@@ -87,7 +84,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return SELECT_TYPE
 
-# --- ADMIN BUYRUG'I (/admin) ---
+# --- КОМАНДА АДМИНА (/admin) ---
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("❌ Siz admin emassiz!")
@@ -99,7 +96,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# --- ADMIN TUGMALARI ISHLOVCHISI ---
+# --- ОБРАБОТЧИК КНОПОК АДМИНА ---
 async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query.from_user.id != ADMIN_ID:
@@ -146,7 +143,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return SET_CARD_STATE
 
-# --- ADMIN KARTANI TUGMA ORQALI O'ZGARTIRISHI ---
+# --- ИЗМЕНЕНИЕ КАРТЫ АДМИНИСТРАТОРОМ ---
 async def save_new_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return ConversationHandler.END
@@ -168,7 +165,7 @@ async def save_new_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return ConversationHandler.END
 
-# --- BUYURTMA OLISH JARAYONI (FOYDALANUVCHILAR UCHUN) ---
+# --- ПРОЦЕСС ОФОРМЛЕНИЯ ЗАКАЗА ---
 async def type_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -251,10 +248,10 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Jarayon bekor qilindi.", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("Jarayon bekor qilindi.")
     return ConversationHandler.END
 
-# --- XABARLAR VA JAVOB CATCHER ---
+# --- ОБРАБОТКА СООБЩЕНИЙ И ОТВЕТОВ ---
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id == ADMIN_ID:
@@ -288,14 +285,14 @@ def main():
         print("Xatolik: BOT_TOKEN topilmadi!")
         return
 
-    # Flask serverni yurgizish
+    # Запуск сервера Flask
     server_thread = Thread(target=run_flask)
     server_thread.daemon = True
     server_thread.start()
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Admin karta sozlashi uchun alohida conversation handler
+    # Обработчик изменения карты для админа
     admin_card_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin_callback, pattern="^change_card_start$")],
         states={
@@ -305,7 +302,7 @@ def main():
         allow_reentry=True
     )
 
-    # Mijozlar uchun conversation handler
+    # Обработчик заказов для пользователей
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -333,4 +330,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-        
+    
