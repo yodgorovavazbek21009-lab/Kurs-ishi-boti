@@ -1,5 +1,8 @@
 import logging
 import os
+from threading import Thread
+from flask import Flask
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     ApplicationBuilder,
@@ -11,7 +14,18 @@ from telegram.ext import (
     filters,
 )
 
-# Serverda xatoliklarni kuzatish uchun loglar
+# Render Timed Out bermasligi uchun soxta veb-server (Flask)
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 8080))
+    web_app.run(host="0.0.0.0", port=port)
+
+# Logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
@@ -27,7 +41,6 @@ CARD_DATA = {
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start buyrug'i bosilganda pastdagi tugmalarni olib tashlaydi"""
     keyboard = [
         [InlineKeyboardButton("📚 Kurs ishi", callback_data="type_Kurs ishi")],
         [InlineKeyboardButton("📝 Mustaqil ish", callback_data="type_Mustaqil ish")],
@@ -36,11 +49,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Pastdagi tugmalarni olib tashlash uchun vaqtincha ReplyKeyboardRemove ishlatamiz
     remove_keyboard = ReplyKeyboardRemove()
     await update.message.reply_text("...", reply_markup=remove_keyboard)
     
-    # Asosiy xabar
     await update.message.reply_text(
         "👋 **Xush kelibsiz!**\n\n"
         "Men orqali kurs ishlari, mustaqil ishlar va boshqa topshiriqlarga buyurtma berishingiz mumkin.\n"
@@ -177,6 +188,11 @@ def main():
     if not BOT_TOKEN:
         print("Xatolik: BOT_TOKEN topilmadi!")
         return
+
+    # Render port xatosini aylanib o'tish uchun Flask serverini alohida ipda ishga tushirish
+    server_thread = Thread(target=run_flask)
+    server_thread.daemon = True
+    server_thread.start()
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
