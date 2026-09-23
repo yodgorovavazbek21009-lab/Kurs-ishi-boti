@@ -14,7 +14,7 @@ from telegram.ext import (
     filters,
 )
 
-# Render & UptimeRobot для веб-сервера (Flask)
+# Render & UptimeRobot uchun veb-server (Flask)
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -30,42 +30,46 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-# ДАННЫЕ АДМИНИСТРАТОРА
+# ADMIN MA'LUMOTLARI
 ADMIN_USERNAME = "@ttmg_2024"
 ADMIN_ID = 6935366567
 
-# Состояния бота (States)
+# Bot holatlari (States)
 SELECT_TYPE, GET_DETAILS, GET_FILE, CONFIRM_PAYMENT, SET_CARD_STATE = range(5)
 
-# Данные карты хранятся в памяти
+# Karta ma'lumotlari
 CARD_DATA = {
     "number": "Biriktirilmagan",
     "holder": "Biriktirilmagan"
 }
 
-# --- КНОПКИ МЕНЮ АДМИНИСТРАТОРА ---
+# Buyurtmalar ro'yxatini saqlash uchun lug'at/ro'yxat
+ORDERS_LIST = []
+
+# --- ADMIN MENYUSI TUGMALARI ---
 def get_admin_keyboard():
     keyboard = [
+        [InlineKeyboardButton("📦 Barcha buyurtmalar", callback_data="admin_all_orders")],
         [InlineKeyboardButton("💳 Kartani ko'rish / o'zgartirish", callback_data="admin_card_menu")],
         [InlineKeyboardButton("ℹ️ Admin haqida", callback_data="admin_info")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# --- START ДЛЯ ПОЛЬЗОВАТЕЛЕЙ ---
+# --- START (FOYDALANUVCHILAR VA ADMIN UCHUN) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
-    # Если админ нажимает /start, открывается панель администратора
+    # Agar admin /start bossa, Admin paneli ochiladi
     if user_id == ADMIN_ID:
         await update.message.reply_text(
             "👑 **Xush kelibsiz, Admin!**\n\n"
-            "Siz admin bo'lganingiz uchun buyurtma bera olmaysiz. Botni boshqarish uchun quyidagi admin panelidan foydalaning:",
+            "Siz admin bo'lganingiz uchun buyurtma bera olmaysiz. Botni boshqarish va buyurtmalarni ko'rish uchun quyidagi paneldan foydalaning:",
             reply_markup=get_admin_keyboard(),
             parse_mode="Markdown"
         )
         return ConversationHandler.END
 
-    # Меню для обычных пользователей
+    # Oddiy foydalanuvchilar uchun menyu
     keyboard = [
         [InlineKeyboardButton("📚 Kurs ishi", callback_data="type_Kurs ishi")],
         [InlineKeyboardButton("📝 Mustaqil ish", callback_data="type_Mustaqil ish")],
@@ -74,7 +78,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Отправка приветствия сразу без промежуточного сообщения "..."
     await update.message.reply_text(
         "👋 **Xush kelibsiz!**\n\n"
         "Men orqali kurs ishlari, mustaqil ishlar va boshqa topshiriqlarga buyurtma berishingiz mumkin.\n"
@@ -84,7 +87,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return SELECT_TYPE
 
-# --- КОМАНДА АДМИНА (/admin) ---
+# --- ADMIN BUYRUG'I (/admin) ---
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("❌ Siz admin emassiz!")
@@ -96,7 +99,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# --- ОБРАБОТЧИК КНОПОК АДМИНА ---
+# --- ADMIN TUGMALARI ISHLOVCHISI ---
 async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query.from_user.id != ADMIN_ID:
@@ -105,7 +108,24 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.answer()
 
-    if query.data == "admin_card_menu":
+    if query.data == "admin_all_orders":
+        if not ORDERS_LIST:
+            msg = "📦 **Barcha buyurtmalar:**\n\nHozircha hech qanday buyurtma kelib tushmagan."
+        else:
+            msg = "📦 **So'nggi buyurtmalar ro'yxati:**\n\n"
+            for idx, order in enumerate(ORDERS_LIST[-10:], 1):  # Oxirgi 10 ta buyurtmani ko'rsatish
+                msg += (
+                    f"**{idx}. Buyurtma**\n"
+                    f"👤 Mijoz: {order['user']}\n"
+                    f"🆔 ID: `{order['user_id']}`\n"
+                    f"📌 Turi: {order['work_type']}\n"
+                    f"📝 Tafsilot: {order['details']}\n"
+                    f"-------------------------------\n"
+                )
+        keyboard = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]]
+        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+    elif query.data == "admin_card_menu":
         msg = (
             "💳 **Hozirgi karta ma'lumotlari:**\n\n"
             f"• Raqami: `{CARD_DATA['number']}`\n"
@@ -122,7 +142,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             f"👑 **Admin:** {ADMIN_USERNAME}\n"
             f"🆔 **Admin ID:** `{ADMIN_ID}`\n\n"
-            "Bot faol ishlamoqda.",
+            f"📊 **Jami buyurtmalar soni:** {len(ORDERS_LIST)} ta",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]]),
             parse_mode="Markdown"
         )
@@ -143,7 +163,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return SET_CARD_STATE
 
-# --- ИЗМЕНЕНИЕ КАРТЫ АДМИНИСТРАТОРОМ ---
+# --- KARTANI O'ZGARTIRISHNI SAQLASH ---
 async def save_new_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return ConversationHandler.END
@@ -165,7 +185,7 @@ async def save_new_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return ConversationHandler.END
 
-# --- ПРОЦЕСС ОФОРМЛЕНИЯ ЗАКАЗА ---
+# --- BUYURTMA OLISH JARAYONI ---
 async def type_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -228,12 +248,21 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("🎉 Buyurtma qabul qilindi\nAdmin siz bilan bogʻlanadi")
 
+    # Buyurtmani ro'yxatga saqlash
+    ORDERS_LIST.append({
+        "user": user.full_name,
+        "user_id": user.id,
+        "work_type": context.user_data.get('work_type', 'Noma\'lum'),
+        "details": context.user_data.get('details', 'Yo\'q')
+    })
+
     admin_text = (
         f"📥 **YANGI BUYURTMA!**\n\n"
         f"👤 **Mijoz:** [{user.full_name}](tg://user?id={user.id})\n"
         f"🆔 **Mijoz ID:** `{user.id}`\n"
         f"📌 **Turi:** {context.user_data.get('work_type')}\n"
-        f"📝 **Batafsil:** {context.user_data.get('details')}\n"
+        f"📝 **Batafsil:** {context.user_data.get('details')}\n\n"
+        f"💬 **Mijozga javob yozish yoki fayl/PDF yuborish uchun ushbu xabarga Reply (Javob berish) qiling.**"
     )
 
     await context.bot.send_photo(chat_id=ADMIN_ID, photo=receipt_photo_id, caption=admin_text, parse_mode="Markdown")
@@ -251,7 +280,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Jarayon bekor qilindi.")
     return ConversationHandler.END
 
-# --- ОБРАБОТКА СООБЩЕНИЙ И ОТВЕТОВ ---
+# --- FOYDALANUVCHIDAN XABAR VA FAYLLARNI ADMINGA FORWARD QILISH ---
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id == ADMIN_ID:
@@ -260,24 +289,42 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
     forwarded_msg = await update.message.forward(chat_id=ADMIN_ID)
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"👆 Mijoz ID: `{user.id}`\nJavob berish uchun ushbu xabarga **Reply (Javob berish)** qiling.",
+        text=f"👆 Mijoz ID: `{user.id}`\nJavob berish yoki fayl yuborish uchun ushbu xabarga **Reply (Javob berish)** qiling.",
         parse_mode="Markdown",
         reply_to_message_id=forwarded_msg.message_id
     )
 
+# --- ADMINDAN MIJOZGA MATN, RASM, PDF, HUJJAT VA BOSHQA FAYLLARNI YUBORISH ---
 async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
 
     if update.message.reply_to_message:
         reply_msg = update.message.reply_to_message
+        target_user_id = None
+
+        # 1. Forward qilingan xabardan ID olish
         if reply_msg.forward_from:
             target_user_id = reply_msg.forward_from.id
+        
+        # 2. Aks holda matn ichidan ID ni ajratib olish (Mijoz ID: ...)
+        elif reply_msg.text or reply_msg.caption:
+            text = reply_msg.text or reply_msg.caption
+            if "Mijoz ID:" in text:
+                try:
+                    target_user_id = int(text.split("Mijoz ID:")[1].split()[0].strip("`"))
+                except Exception:
+                    pass
+
+        if target_user_id:
             try:
+                # Har qanday turdagi xabar va fayllarni (PDF, rasm, matn) klientga nusxalab yuboradi
                 await update.message.copy(chat_id=target_user_id)
-                await update.message.reply_text("✅ Javobingiz mijozga yetkazildi!")
+                await update.message.reply_text("✅ Javobingiz va faylingiz mijozga yetkazildi!")
             except Exception as e:
-                await update.message.reply_text(f"❌ Xatolik: {e}")
+                await update.message.reply_text(f"❌ Xatolik yuz berdi: {e}")
+        else:
+            await update.message.reply_text("⚠️ Mijoz ID si aniqlanmadi. Iltimos, mijozdan kelgan xabarga Reply qiling.")
 
 def main():
     BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -285,14 +332,14 @@ def main():
         print("Xatolik: BOT_TOKEN topilmadi!")
         return
 
-    # Запуск сервера Flask
+    # Flask serverni yurgizish
     server_thread = Thread(target=run_flask)
     server_thread.daemon = True
     server_thread.start()
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Обработчик изменения карты для админа
+    # Admin karta sozlashi uchun conversation handler
     admin_card_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin_callback, pattern="^change_card_start$")],
         states={
@@ -302,7 +349,7 @@ def main():
         allow_reentry=True
     )
 
-    # Обработчик заказов для пользователей
+    # Mijozlar uchun conversation handler
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -322,7 +369,11 @@ def main():
     app.add_handler(admin_card_handler)
     app.add_handler(CallbackQueryHandler(admin_callback, pattern="^(admin_|change_card_)"))
     app.add_handler(conv_handler)
+    
+    # Admin xabarlariga ishlov beruvchi handler (har qanday fayl va matnni klientga yetkazadi)
     app.add_handler(MessageHandler(filters.REPLY & filters.User(ADMIN_ID), handle_admin_reply))
+    
+    # Foydalanuvchi xabarlari hamda fayllarini qabul qilish
     app.add_handler(MessageHandler(~filters.COMMAND & ~filters.User(ADMIN_ID), handle_user_messages))
 
     print("Bot muvaffaqiyatli ishga tushdi!")
@@ -330,4 +381,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+        
