@@ -14,12 +14,12 @@ from telegram.ext import (
     filters,
 )
 
-# Render Timed Out bermasligi uchun soxta veb-server (Flask)
+# Render & UptimeRobot uchun veb-server (Flask)
 web_app = Flask(__name__)
 
 @web_app.route('/')
 def home():
-    return "Bot is running!"
+    return "Bot is active and running!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
@@ -33,14 +33,38 @@ logging.basicConfig(
 ADMIN_USERNAME = "@bukhara05"
 ADMIN_ID = 6935366567
 
-SELECT_TYPE, GET_DETAILS, GET_FILE, CONFIRM_PAYMENT, ADMIN_SEND_WORK = range(5)
+# Bot holatlari (States)
+SELECT_TYPE, GET_DETAILS, GET_FILE, CONFIRM_PAYMENT, SET_CARD_STATE = range(5)
 
+# Karta ma'lumotlari xotirada saqlanadi
 CARD_DATA = {
     "number": "Biriktirilmagan",
     "holder": "Biriktirilmagan"
 }
 
+# --- ADMIN MENYUSI TUGMALARI ---
+def get_admin_keyboard():
+    keyboard = [
+        [InlineKeyboardButton("💳 Kartani ko'rish / o'zgartirish", callback_data="admin_card_menu")],
+        [InlineKeyboardButton("ℹ️ Admin haqida", callback_data="admin_info")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+# --- FOYDALANUVCHILAR UCHUN START ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    # Agar admin /start bossa, buyurtma berish emas, Admin paneli ochiladi
+    if user_id == ADMIN_ID:
+        await update.message.reply_text(
+            "👑 **Xush kelibsiz, Admin!**\n\n"
+            "Siz admin bo'lganingiz uchun buyurtma bera olmaysiz. Botni boshqarish uchun quyidagi admin panelidan foydalaning:",
+            reply_markup=get_admin_keyboard(),
+            parse_mode="Markdown"
+        )
+        return ConversationHandler.END
+
+    # Oddiy foydalanuvchilar uchun menyu
     keyboard = [
         [InlineKeyboardButton("📚 Kurs ishi", callback_data="type_Kurs ishi")],
         [InlineKeyboardButton("📝 Mustaqil ish", callback_data="type_Mustaqil ish")],
@@ -49,6 +73,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    # Eski reply-tugmalarni tozalash
     remove_keyboard = ReplyKeyboardRemove()
     await update.message.reply_text("...", reply_markup=remove_keyboard)
     
@@ -61,6 +86,88 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return SELECT_TYPE
 
+# --- ADMIN BUYRUG'I (/admin) ---
+async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Siz admin emassiz!")
+        return
+
+    await update.message.reply_text(
+        "🛠 **Admin paneli:**",
+        reply_markup=get_admin_keyboard(),
+        parse_mode="Markdown"
+    )
+
+# --- ADMIN TUGMALARI ISHLOVCHISI ---
+async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query.from_user.id != ADMIN_ID:
+        await query.answer("Sizga ruxsat berilmagan!", show_alert=True)
+        return
+
+    await query.answer()
+
+    if query.data == "admin_card_menu":
+        msg = (
+            "💳 **Hozirgi karta ma'lumotlari:**\n\n"
+            f"• Raqami: `{CARD_DATA['number']}`\n"
+            f"• Egasining ismi: **{CARD_DATA['holder']}**\n\n"
+            "Kartani o'zgartirish uchun pastdagi tugmani bosing:"
+        )
+        keyboard = [
+            [InlineKeyboardButton("✏️ Kartani yangilash", callback_data="change_card_start")],
+            [InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]
+        ]
+        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+    elif query.data == "admin_info":
+        await query.edit_message_text(
+            f"👑 **Admin:** {ADMIN_USERNAME}\n"
+            f"🆔 **Admin ID:** `{ADMIN_ID}`\n\n"
+            "Bot faol ishlamoqda.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]]),
+            parse_mode="Markdown"
+        )
+
+    elif query.data == "admin_back":
+        await query.edit_message_text(
+            "🛠 **Admin paneli:**",
+            reply_markup=get_admin_keyboard(),
+            parse_mode="Markdown"
+        )
+
+    elif query.data == "change_card_start":
+        await query.edit_message_text(
+            "📝 **Yangi karta ma'lumotlarini yuboring:**\n\n"
+            "Format: `KARTA_RAQAM ISMI`\n"
+            "Masalan: `8600123456789012 BAXODIR JUMAYEV`",
+            parse_mode="Markdown"
+        )
+        return SET_CARD_STATE
+
+# --- ADMIN KARTANI TUGMA ORQALI O'ZGARTIRISHI ---
+async def save_new_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return ConversationHandler.END
+
+    text = update.message.text.strip().split(maxsplit=1)
+    if len(text) < 2:
+        await update.message.reply_text("❌ Noto'g me'morchilik! Iltimos, karta raqami va ismini birga yuboring.\nMasalan: `8600123456789012 BAXODIR JUMAYEV`", parse_mode="Markdown")
+        return SET_CARD_STATE
+
+    CARD_DATA["number"] = text[0]
+    CARD_DATA["holder"] = text[1]
+
+    await update.message.reply_text(
+        f"✅ **Karta muvaffaqiyatli yangilandi!**\n\n"
+        f"Raqami: `{CARD_DATA['number']}`\n"
+        f"Egasi: **{CARD_DATA['holder']}**",
+        reply_markup=get_admin_keyboard(),
+        parse_mode="Markdown"
+    )
+    return ConversationHandler.END
+
+# --- BUYURTMA OLISH JARAYONI (FOYDALANUVCHILAR UCHUN) ---
 async def type_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -143,9 +250,10 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Buyurtma bekor qilindi.", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("Jarayon bekor qilindi.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
+# --- XABARLAR VA JAVOB CATCHER ---
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id == ADMIN_ID:
@@ -173,29 +281,30 @@ async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
             except Exception as e:
                 await update.message.reply_text(f"❌ Xatolik: {e}")
 
-async def set_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-    if len(context.args) < 2:
-        await update.message.reply_text("Format: `/setcard KARTA_RAQAM ISMI`", parse_mode="Markdown")
-        return
-    CARD_DATA["number"] = context.args[0]
-    CARD_DATA["holder"] = " ".join(context.args[1:])
-    await update.message.reply_text(f"✅ Karta yangilandi:\n`{CARD_DATA['number']}` - **{CARD_DATA['holder']}**", parse_mode="Markdown")
-
 def main():
     BOT_TOKEN = os.getenv("BOT_TOKEN")
     if not BOT_TOKEN:
         print("Xatolik: BOT_TOKEN topilmadi!")
         return
 
-    # Render port xatosini aylanib o'tish uchun Flask serverini alohida ipda ishga tushirish
+    # Flask serverni yurgizish
     server_thread = Thread(target=run_flask)
     server_thread.daemon = True
     server_thread.start()
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    # Admin karta sozlashi uchun alohida conversation handler
+    admin_card_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(admin_callback, pattern="^change_card_start$")],
+        states={
+            SET_CARD_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND & filters.User(ADMIN_ID), save_new_card)]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        allow_reentry=True
+    )
+
+    # Mijozlar uchun conversation handler
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -211,7 +320,9 @@ def main():
         allow_reentry=True
     )
 
-    app.add_handler(CommandHandler("setcard", set_card))
+    app.add_handler(CommandHandler("admin", admin_command))
+    app.add_handler(admin_card_handler)
+    app.add_handler(CallbackQueryHandler(admin_callback, pattern="^(admin_|change_card_)"))
     app.add_handler(conv_handler)
     app.add_handler(MessageHandler(filters.REPLY & filters.User(ADMIN_ID), handle_admin_reply))
     app.add_handler(MessageHandler(~filters.COMMAND & ~filters.User(ADMIN_ID), handle_user_messages))
@@ -221,4 +332,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
