@@ -36,7 +36,7 @@ ADMIN_USERNAME = "@Bukhara05"
 ADMIN_ID = 6935366567
 
 # Bot holatlari (States)
-SELECT_TYPE, GET_DETAILS, GET_FILE, CONFIRM_PAYMENT, SET_CARD_STATE, ADMIN_SEND_FILE, USER_REPLY_STATE = range(7)
+SELECT_TYPE, GET_DETAILS, GET_FILE, CONFIRM_PAYMENT, SET_CARD_HOLDER, SET_CARD_NUMBER, ADMIN_SEND_FILE, USER_REPLY_STATE = range(8)
 
 # Karta ma'lumotlari
 CARD_DATA = {
@@ -273,13 +273,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("📦 **Barcha buyurtmalar to'liq tozalandi!**")
 
     elif query.data == "change_card_start":
-        await query.message.reply_text(
-            "📝 **Yangi karta ma'lumotlarini yuboring:**\n\n"
-            "Format: `KARTA_RAQAM ISMI`\n"
-            "Masalan: `8600123456789012 BAXODIR JUMAYEV`",
-            parse_mode="Markdown"
-        )
-        return SET_CARD_STATE
+        await query.message.reply_text("📝 Karta egasining **Ism va Familiya**sini kiriting:")
+        return SET_CARD_HOLDER
 
     elif query.data.startswith("reply_to_"):
         target_id = int(query.data.split("_")[2])
@@ -314,7 +309,8 @@ async def send_file_from_admin(update: Update, context: ContextTypes.DEFAULT_TYP
 async def user_ask_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.message.reply_text("📝 **Adminga yubormoqchi bo'lgan xabaringiz yoki faylingizni kiriting:**")
+    # Yulduzchalar (**) olib tashlandi
+    await query.message.reply_text("📝 Adminga yubormoqchi bo'lgan xabaringiz yoki faylingizni kiriting:")
     return USER_REPLY_STATE
 
 async def send_user_reply_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -331,17 +327,22 @@ async def send_user_reply_to_admin(update: Update, context: ContextTypes.DEFAULT
     await update.message.reply_text("✅ Xabaringiz adminga yetkazildi!")
     return ConversationHandler.END
 
-# --- KARTANI YANGILASHNI SAQLASH ---
-async def save_new_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip().split(maxsplit=1)
-    if len(text) < 2:
-        await update.message.reply_text("❌ Noto'g'ri format! Iltimos, karta raqami va ismini birga yuboring.\nMasalan: `8600123456789012 BAXODIR JUMAYEV`", parse_mode="Markdown")
-        return SET_CARD_STATE
+# --- KARTANI BOSQICHMA-BOSQICH YANGILASH ---
+async def save_card_holder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["new_card_holder"] = update.message.text.strip()
+    await update.message.reply_text("💳 Endi **Karta raqami**ni kiriting (masalan: `8600123456789012`):", parse_mode="Markdown")
+    return SET_CARD_NUMBER
 
-    CARD_DATA["number"] = text[0]
-    CARD_DATA["holder"] = text[1]
+async def save_card_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    CARD_DATA["holder"] = context.user_data.get("new_card_holder", "Biriktirilmagan")
+    CARD_DATA["number"] = update.message.text.strip()
 
-    await update.message.reply_text(f"✅ **Karta muvaffaqiyatli yangilandi!**\n\nRaqami: `{CARD_DATA['number']}`\nEgasi: **{CARD_DATA['holder']}**", parse_mode="Markdown")
+    await update.message.reply_text(
+        f"✅ **Karta muvaffaqiyatli yangilandi!**\n\n"
+        f"• Egasi: **{CARD_DATA['holder']}**\n"
+        f"• Raqami: `{CARD_DATA['number']}`",
+        parse_mode="Markdown"
+    )
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -397,7 +398,8 @@ def main():
     admin_card_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(callback_handler, pattern="^change_card_start$")],
         states={
-            SET_CARD_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), save_new_card)]
+            SET_CARD_HOLDER: [MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), save_card_holder)],
+            SET_CARD_NUMBER: [MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), save_card_number)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True
