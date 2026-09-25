@@ -262,7 +262,7 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admin_text = (
         f"📥 **YANGI BUYURTMA!**\n\n"
         f"👤 **Mijoz:** [{user.full_name}](tg://user?id={user.id})\n"
-        f"🆔 **Mijoz ID:** `{user.id}`\n"
+        f"🆔 Mijoz ID: `{user.id}`\n"
         f"📌 **Turi:** {context.user_data.get('work_type')}\n"
         f"📝 **Batafsil:** {context.user_data.get('details')}\n\n"
         f"💬 **Mijozga tayyor ishni (PDF, fayl, rasm) yuborish uchun ushbu xabarga Reply (Javob berish) qilib tashlang.**"
@@ -273,9 +273,9 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "file_id" in context.user_data:
         ftype = context.user_data["file_type"]
         if ftype == "document":
-            await context.bot.send_document(chat_id=ADMIN_ID, document=context.user_data["file_id"], caption=f"📎 Topshiriq fayli (Mijoz ID: `{user.id}`)", parse_mode="Markdown")
+            await context.bot.send_document(chat_id=ADMIN_ID, document=context.user_data["file_id"], caption=f"📎 Topshiriq fayli\nMijoz ID: `{user.id}`", parse_mode="Markdown")
         elif ftype == "photo":
-            await context.bot.send_photo(chat_id=ADMIN_ID, photo=context.user_data["file_id"], caption=f"📎 Topshiriq rasmi (Mijoz ID: `{user.id}`)", parse_mode="Markdown")
+            await context.bot.send_photo(chat_id=ADMIN_ID, photo=context.user_data["file_id"], caption=f"📎 Topshiriq rasmi\nMijoz ID: `{user.id}`", parse_mode="Markdown")
 
     return ConversationHandler.END
 
@@ -307,19 +307,21 @@ async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
         reply_msg = update.message.reply_to_message
         target_user_id = None
 
-        # Forward qilingan xabar orqali ID topish
+        # 1. Forward qilingan xabardan ID topish
         if reply_msg.forward_from:
             target_user_id = reply_msg.forward_from.id
         
-        # Xabar matni yoki rasm ostidagi izohdan Mijoz ID sini izlash
+        # 2. Xabar matni yoki rasm ostidagi izohdan (caption) Mijoz ID sini qidirish
         search_text = (reply_msg.text or "") + " " + (reply_msg.caption or "")
-        if "Mijoz ID:" in search_text:
-            match = re.search(r"Mijoz ID:\s*`?(\d+)`?", search_text)
-            if match:
-                target_user_id = int(match.group(1))
+        
+        # Mos keluvchi ID raqamini qidirish (Mijoz ID: 7323563358 yoki shunga o'xshash)
+        match = re.search(r"Mijoz ID[:\s]*`?(\d+)`?", search_text, re.IGNORECASE)
+        if match:
+            target_user_id = int(match.group(1))
 
         if target_user_id:
             try:
+                # Admin Reply qilib yuborgan fayl, PDF, rasm, videoni mijozga yetkazadi
                 await update.message.copy(chat_id=target_user_id)
                 await update.message.reply_text("✅ Tayyor fayl/rasm mijozga muvaffaqiyatli yetkazildi!")
             except Exception as e:
@@ -368,7 +370,10 @@ def main():
     app.add_handler(CallbackQueryHandler(admin_callback, pattern="^(admin_|change_card_)"))
     app.add_handler(conv_handler)
     
+    # Admin har qanday xabarga (Reply) qilib fayl/rasm yuborganda ushlab qoluvchi handler
     app.add_handler(MessageHandler(filters.REPLY & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), handle_admin_reply))
+    
+    # Klient xabarlariga ishlov beruvchi handler
     app.add_handler(MessageHandler(~filters.COMMAND & ~(filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), handle_user_messages))
 
     print("Bot muvaffaqiyatli ishga tushdi!")
@@ -376,4 +381,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+                                
