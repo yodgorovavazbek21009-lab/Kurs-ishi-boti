@@ -51,7 +51,7 @@ ORDERS_LIST = []
 def get_user_reply_keyboard():
     keyboard = [
         [KeyboardButton("📚 Kurs ishi"), KeyboardButton("📝 Mustaqil ish")],
-        [KeyboardButton("📑 Referat / Boshqa"), KeyboardButton("ℹ️ Ma'lumot")]
+        [KeyboardButton("📑 Referat / Boshqa")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -125,8 +125,8 @@ async def get_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return GET_FILE
 
-# --- FAYL OLISH VA TO'LOV REKVIZITLARINI KO'RSATISH ---
-async def get_file_and_show_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# --- MAVZU/FAYL TOPSHIRILGANDA TUGMA ORQALI TO'LOVGA O'TISH ---
+async def prompt_payment_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message:
         if update.message.document:
             context.user_data["file_id"] = update.message.document.file_id
@@ -135,22 +135,39 @@ async def get_file_and_show_payment(update: Update, context: ContextTypes.DEFAUL
             context.user_data["file_id"] = update.message.photo[-1].file_id
             context.user_data["file_type"] = "photo"
     
+    pay_btn = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💳 To'lov rekvizitlari", callback_data="show_payment_details")]
+    ])
+
+    msg = (
+        "🎉 **Topshiriq ma'lumotlari qabul qilindi!**\n\n"
+        "Admin tez orada siz bilan bog'lanadi.\n"
+        "To'lovni amalga oshirish va chekni yuborish uchun pastdagi tugmani bosing:"
+    )
+
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(msg, reply_markup=pay_btn, parse_mode="Markdown")
+    else:
+        await update.message.reply_text(msg, reply_markup=pay_btn, parse_mode="Markdown")
+        
+    return CONFIRM_PAYMENT
+
+# --- TO'LOV REKVIZITLARINI KO'RSATISH ---
+async def show_payment_details_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
     msg = (
         "💳 **To'lov rekvizitlari:**\n\n"
         f"Karta raqami: `{CARD_DATA['number']}`\n"
         f"Egalik qiluvchi: **{CARD_DATA['holder']}**\n\n"
-        "To'lov chekini (rasm yoki PDF fayl ko'rinishida) shu yerga yuboring."
+        "To'lovni amalga oshirib, chekni (rasm yoki PDF fayl ko'rinishida) shu yerga yuboring."
     )
-    
-    if update.callback_query:
-        await update.callback_query.answer()
-        await update.callback_query.edit_message_text(msg, parse_mode="Markdown")
-    else:
-        await update.message.reply_text(msg, parse_mode="Markdown")
-        
+    await query.edit_message_text(msg, parse_mode="Markdown")
     return CONFIRM_PAYMENT
 
-# --- TO'LOV CHEKINI QABUL QILISH (RASM YOKI PDF) ---
+# --- TO'LOV CHEKINI QABUL QILISH ---
 async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     receipt_photo_id = None
@@ -165,7 +182,7 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return CONFIRM_PAYMENT
 
     await update.message.reply_text(
-        "🎉 Buyurtma qabul qilindi\nAdmin siz bilan bogʻlanadi",
+        "✅ To'lov cheki qabul qilindi! Admin tez orada ko'rib chiqadi.",
         reply_markup=get_user_reply_keyboard()
     )
 
@@ -309,7 +326,6 @@ async def send_file_from_admin(update: Update, context: ContextTypes.DEFAULT_TYP
 async def user_ask_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    # Yulduzchalar (**) olib tashlandi
     await query.message.reply_text("📝 Adminga yubormoqchi bo'lgan xabaringiz yoki faylingizni kiriting:")
     return USER_REPLY_STATE
 
@@ -413,10 +429,13 @@ def main():
         states={
             GET_DETAILS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_details)],
             GET_FILE: [
-                MessageHandler(filters.Document.ALL | filters.PHOTO, get_file_and_show_payment),
-                CallbackQueryHandler(get_file_and_show_payment, pattern="^skip_file$")
+                MessageHandler(filters.Document.ALL | filters.PHOTO, prompt_payment_button),
+                CallbackQueryHandler(prompt_payment_button, pattern="^skip_file$")
             ],
-            CONFIRM_PAYMENT: [MessageHandler(filters.PHOTO | filters.Document.ALL, receive_receipt)]
+            CONFIRM_PAYMENT: [
+                CallbackQueryHandler(show_payment_details_callback, pattern="^show_payment_details$"),
+                MessageHandler(filters.PHOTO | filters.Document.ALL, receive_receipt)
+            ]
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True
