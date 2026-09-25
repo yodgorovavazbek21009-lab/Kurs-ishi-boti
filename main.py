@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from threading import Thread
 from flask import Flask
 
@@ -30,7 +31,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-# YANGI ADMIN MA'LUMOTLARI
+# ADMIN MA'LUMOTLARI
 ADMIN_USERNAME = "@Bukhara05"
 ADMIN_ID = 6935366567
 
@@ -264,7 +265,7 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🆔 **Mijoz ID:** `{user.id}`\n"
         f"📌 **Turi:** {context.user_data.get('work_type')}\n"
         f"📝 **Batafsil:** {context.user_data.get('details')}\n\n"
-        f"💬 **Mijozga tayyor ishni (PDF, fayl, rasm) yuborish uchun ushbu xabarga Reply (Javob berish) qiling.**"
+        f"💬 **Mijozga tayyor fayl/rasmni yuborish uchun ushbu xabarga Reply (Javob berish) qiling.**"
     )
 
     await context.bot.send_photo(chat_id=ADMIN_ID, photo=receipt_photo_id, caption=admin_text, parse_mode="Markdown")
@@ -272,9 +273,9 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "file_id" in context.user_data:
         ftype = context.user_data["file_type"]
         if ftype == "document":
-            await context.bot.send_document(chat_id=ADMIN_ID, document=context.user_data["file_id"], caption=f"📎 Klient yuborgan topshiriq fayli (Mijoz ID: `{user.id}`)", parse_mode="Markdown")
+            await context.bot.send_document(chat_id=ADMIN_ID, document=context.user_data["file_id"], caption=f"📎 Topshiriq fayli (Mijoz ID: `{user.id}`)", parse_mode="Markdown")
         elif ftype == "photo":
-            await context.bot.send_photo(chat_id=ADMIN_ID, photo=context.user_data["file_id"], caption=f"📎 Klient yuborgan topshiriq rasmi (Mijoz ID: `{user.id}`)", parse_mode="Markdown")
+            await context.bot.send_photo(chat_id=ADMIN_ID, photo=context.user_data["file_id"], caption=f"📎 Topshiriq rasmi (Mijoz ID: `{user.id}`)", parse_mode="Markdown")
 
     return ConversationHandler.END
 
@@ -282,7 +283,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Jarayon bekor qilindi.")
     return ConversationHandler.END
 
-# --- KLIENTDAN KELGAN XABAR VA FAYLLARNI ADMINGA YUBORISH ---
+# --- KLIENTDAN KELGAN XABAR VA FAYLLARNI ADMINGA FORWARD QILISH ---
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id == ADMIN_ID or (user.username and user.username.lower() == "bukhara05"):
@@ -296,7 +297,7 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_to_message_id=forwarded_msg.message_id
     )
 
-# --- ADMINDAN KLIENTGA FAYL VA XABARLARNI YUBORISH ---
+# --- ADMINDAN KLIENTGA TAYYOR FAYL, PDF, RASM VA MATNLARNI REPLI ORQALI YUBORISH ---
 async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
@@ -306,24 +307,26 @@ async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
         reply_msg = update.message.reply_to_message
         target_user_id = None
 
+        # 1. Forward qilingan xabardan ID olish
         if reply_msg.forward_from:
             target_user_id = reply_msg.forward_from.id
-        elif reply_msg.text or reply_msg.caption:
-            text = reply_msg.text or reply_msg.caption
-            if "Mijoz ID:" in text:
-                try:
-                    target_user_id = int(text.split("Mijoz ID:")[1].split()[0].strip("`"))
-                except Exception:
-                    pass
+        
+        # 2. Xabar matni yoki rasm ostidagi izohdan Mijoz ID sini qidirish
+        search_text = (reply_msg.text or "") + " " + (reply_msg.caption or "")
+        if "Mijoz ID:" in search_text:
+            match = re.search(r"Mijoz ID:\s*`?(\d+)`?", search_text)
+            if match:
+                target_user_id = int(match.group(1))
 
         if target_user_id:
             try:
+                # Admin yuborgan barcha turdagi xabarlarni (PDF, Word, Rasm, Video, Matn) klientga uzatadi
                 await update.message.copy(chat_id=target_user_id)
-                await update.message.reply_text("✅ Tayyor ish / faylingiz klientga yetkazildi!")
+                await update.message.reply_text("✅ Tayyor fayl/rasm mijozga muvaffaqiyatli yetkazildi!")
             except Exception as e:
                 await update.message.reply_text(f"❌ Xatolik yuz berdi: {e}")
         else:
-            await update.message.reply_text("⚠️ Mijoz ID si aniqlanmadi. Iltimos, mijoz xabariga Reply (Javob berish) qiling.")
+            await update.message.reply_text("⚠️ Mijoz ID si topilmadi. Iltimos, mijoz tushgan xabarga yoki chek xabariga Reply (Javob berish) qiling.")
 
 def main():
     BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -366,7 +369,10 @@ def main():
     app.add_handler(CallbackQueryHandler(admin_callback, pattern="^(admin_|change_card_)"))
     app.add_handler(conv_handler)
     
+    # Admin har qanday xabarga (Reply) qilib fayl/rasm yuborganda ushlab qoluvchi handler
     app.add_handler(MessageHandler(filters.REPLY & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), handle_admin_reply))
+    
+    # Klient xabarlariga ishlov beruvchi handler
     app.add_handler(MessageHandler(~filters.COMMAND & ~(filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), handle_user_messages))
 
     print("Bot muvaffaqiyatli ishga tushdi!")
