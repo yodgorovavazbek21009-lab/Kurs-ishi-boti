@@ -47,7 +47,7 @@ CARD_DATA = {
 # Buyurtmalar ro'yxati
 ORDERS_LIST = []
 
-# --- KLIENT UCHUN PASTKI TUGMALAR (RASMDAGIDEK) ---
+# --- KLIENT UCHUN PASTKI TUGMALAR ---
 def get_user_reply_keyboard():
     keyboard = [
         [KeyboardButton("📚 Kurs ishi"), KeyboardButton("📝 Mustaqil ish")],
@@ -125,6 +125,7 @@ async def get_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return GET_FILE
 
+# --- FAYL OLISH VA TO'LOV REKVIZITLARINI KO'RSATISH ---
 async def get_file_and_show_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message:
         if update.message.document:
@@ -138,7 +139,7 @@ async def get_file_and_show_payment(update: Update, context: ContextTypes.DEFAUL
         "💳 **To'lov rekvizitlari:**\n\n"
         f"Karta raqami: `{CARD_DATA['number']}`\n"
         f"Egalik qiluvchi: **{CARD_DATA['holder']}**\n\n"
-        "To'lov chekini (rasm/skrinshot) shu yerga yuboring."
+        "To'lov chekini (rasm yoki PDF fayl ko'rinishida) shu yerga yuboring."
     )
     
     if update.callback_query:
@@ -149,12 +150,18 @@ async def get_file_and_show_payment(update: Update, context: ContextTypes.DEFAUL
         
     return CONFIRM_PAYMENT
 
+# --- TO'LOV CHEKINI QABUL QILISH (RASM YOKI PDF) ---
 async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    receipt_photo_id = update.message.photo[-1].file_id if update.message.photo else None
-    
-    if not receipt_photo_id:
-        await update.message.reply_text("Iltimos, to'lov chekini rasm ko'rinishida yuboring.")
+    receipt_photo_id = None
+    receipt_doc_id = None
+
+    if update.message.photo:
+        receipt_photo_id = update.message.photo[-1].file_id
+    elif update.message.document:
+        receipt_doc_id = update.message.document.file_id
+    else:
+        await update.message.reply_text("Iltimos, to'lov chekini rasm yoki PDF fayl ko'rinishida yuboring.")
         return CONFIRM_PAYMENT
 
     await update.message.reply_text(
@@ -171,7 +178,8 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     })
 
     admin_text = (
-        f"📥 **YANGI BUYURTMA!**\n\n"
+        f"📥 **YANGI BUYURTMA!**\n"
+        f"🧾 **TO'LOV CHEKI KELDI**\n\n"
         f"👤 **Mijoz:** [{user.full_name}](tg://user?id={user.id})\n"
         f"🔗 **Username:** @{user.username if user.username else 'Yo\'q'}\n"
         f"🆔 **Mijoz ID:** `{user.id}`\n"
@@ -184,7 +192,10 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💬 Javob berish / Fayl yuborish", callback_data=f"reply_to_{user.id}")]
     ])
 
-    await context.bot.send_photo(chat_id=ADMIN_ID, photo=receipt_photo_id, caption=admin_text, reply_markup=admin_btn, parse_mode="Markdown")
+    if receipt_photo_id:
+        await context.bot.send_photo(chat_id=ADMIN_ID, photo=receipt_photo_id, caption=admin_text, reply_markup=admin_btn, parse_mode="Markdown")
+    elif receipt_doc_id:
+        await context.bot.send_document(chat_id=ADMIN_ID, document=receipt_doc_id, caption=admin_text, reply_markup=admin_btn, parse_mode="Markdown")
 
     if "file_id" in context.user_data:
         ftype = context.user_data["file_type"]
@@ -261,10 +272,19 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Barcha buyurtmalar tozalandi!", show_alert=True)
         await query.edit_message_text("📦 **Barcha buyurtmalar to'liq tozalandi!**")
 
+    elif query.data == "change_card_start":
+        await query.message.reply_text(
+            "📝 **Yangi karta ma'lumotlarini yuboring:**\n\n"
+            "Format: `KARTA_RAQAM ISMI`\n"
+            "Masalan: `8600123456789012 BAXODIR JUMAYEV`",
+            parse_mode="Markdown"
+        )
+        return SET_CARD_STATE
+
     elif query.data.startswith("reply_to_"):
         target_id = int(query.data.split("_")[2])
         context.user_data["target_user_id"] = target_id
-        await query.edit_message_text(
+        await query.message.reply_text(
             f"📤 **Mijozga (ID: `{target_id}`) fayl yoki javob yuborish rejimidasiz.**\n\n"
             f"Iltimos, klientga yetkazilishi kerak bo'lgan **fayl, PDF, Word, rasm yoki matn**ni yuboring:",
             parse_mode="Markdown"
@@ -311,24 +331,24 @@ async def send_user_reply_to_admin(update: Update, context: ContextTypes.DEFAULT
     await update.message.reply_text("✅ Xabaringiz adminga yetkazildi!")
     return ConversationHandler.END
 
-# --- KARTANI YANGILASH ---
+# --- KARTANI YANGILASHNI SAQLASH ---
 async def save_new_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip().split(maxsplit=1)
     if len(text) < 2:
-        await update.message.reply_text("❌ Noto'g'ri format! Masalan: `8600123456789012 BAXODIR JUMAYEV`", parse_mode="Markdown")
+        await update.message.reply_text("❌ Noto'g'ri format! Iltimos, karta raqami va ismini birga yuboring.\nMasalan: `8600123456789012 BAXODIR JUMAYEV`", parse_mode="Markdown")
         return SET_CARD_STATE
 
     CARD_DATA["number"] = text[0]
     CARD_DATA["holder"] = text[1]
 
-    await update.message.reply_text(f"✅ **Karta yangilandi!**\nRaqami: `{CARD_DATA['number']}`\nEgasi: **{CARD_DATA['holder']}**", parse_mode="Markdown")
+    await update.message.reply_text(f"✅ **Karta muvaffaqiyatli yangilandi!**\n\nRaqami: `{CARD_DATA['number']}`\nEgasi: **{CARD_DATA['holder']}**", parse_mode="Markdown")
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Jarayon bekor qilindi.", reply_markup=get_user_reply_keyboard())
     return ConversationHandler.END
 
-# --- ODDY XABARLAR ---
+# --- ODDIY XABARLAR ---
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id == ADMIN_ID or (user.username and user.username.lower() == "bukhara05"):
@@ -394,7 +414,7 @@ def main():
                 MessageHandler(filters.Document.ALL | filters.PHOTO, get_file_and_show_payment),
                 CallbackQueryHandler(get_file_and_show_payment, pattern="^skip_file$")
             ],
-            CONFIRM_PAYMENT: [MessageHandler(filters.PHOTO, receive_receipt)]
+            CONFIRM_PAYMENT: [MessageHandler(filters.PHOTO | filters.Document.ALL, receive_receipt)]
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True
