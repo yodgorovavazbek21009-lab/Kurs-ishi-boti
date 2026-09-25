@@ -15,7 +15,7 @@ from telegram.ext import (
     filters,
 )
 
-# Render & UptimeRobot uchun veb-server (Flask)
+# Render & UptimeRobot web server (Flask)
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -31,23 +31,23 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-# ADMIN MA'LUMOTLARI
+# ADMIN INFO
 ADMIN_USERNAME = "@Bukhara05"
 ADMIN_ID = 6935366567
 
-# Bot holatlari (States)
+# Bot States
 SELECT_TYPE, GET_DETAILS, CONFIRM_PAYMENT, SET_CARD_HOLDER, SET_CARD_NUMBER, ADMIN_SEND_FILE, USER_REPLY_STATE = range(7)
 
-# Karta ma'lumotlari
+# Card details
 CARD_DATA = {
     "number": "Biriktirilmagan",
     "holder": "Biriktirilmagan"
 }
 
-# Buyurtmalar ro'yxati
+# Orders list
 ORDERS_LIST = []
 
-# --- KLIENT UCHUN PASTKI TUGMALAR ---
+# --- USER REPLY KEYBOARD ---
 def get_user_reply_keyboard():
     keyboard = [
         [KeyboardButton("📚 Kurs ishi"), KeyboardButton("📝 Mustaqil ish")],
@@ -55,7 +55,7 @@ def get_user_reply_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# --- ADMIN UCHUN PASTKI TUGMALAR ---
+# --- ADMIN REPLY KEYBOARD ---
 def get_admin_reply_keyboard():
     keyboard = [
         [KeyboardButton("📦 Barcha buyurtmalar"), KeyboardButton("💳 Karta sozlamasi")],
@@ -63,7 +63,7 @@ def get_admin_reply_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# --- START (FOYDALANUVCHILAR VA ADMIN UCHUN) ---
+# --- START ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
@@ -86,7 +86,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return SELECT_TYPE
 
-# --- ADMIN BUYRUG'I (/admin) ---
+# --- ADMIN COMMAND (/admin) ---
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
@@ -99,7 +99,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# --- BUYURTMA TURI SECHILGANDA (ORQAGA TUGMASI BILAN) ---
+# --- SELECT WORK TYPE ---
 async def type_selected_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     work_type = update.message.text.replace("📚 ", "").replace("📝 ", "").replace("📑 ", "")
     context.user_data["work_type"] = work_type
@@ -117,18 +117,19 @@ async def type_selected_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
     return GET_DETAILS
 
-# --- "ORQAGA" TUGMASI ISHLOVCHISI ---
+# --- BACK BUTTON CALLBACK ---
 async def go_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    await query.edit_message_text("🔄 Bekor qilindi.")
     await query.message.reply_text(
-        "🔄 Asosiy menyuga qaytdingiz. Qayta tanlang:",
+        "Asosiy menyuga qaytdingiz. Qayta tanlang:",
         reply_markup=get_user_reply_keyboard()
     )
     return SELECT_TYPE
 
-# --- MATN YUBORILGANDA SHUNDAY TO'LOV TUGMASI CHIQADI ---
+# --- RECEIVE DETAILS AND SHOW PAYMENT BUTTON ---
 async def get_details_and_show_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["details"] = update.message.text
     
@@ -145,7 +146,7 @@ async def get_details_and_show_payment(update: Update, context: ContextTypes.DEF
     )
     return CONFIRM_PAYMENT
 
-# --- TO'LOV REKVIZITLARINI KO'RSATISH ---
+# --- SHOW PAYMENT DETAILS ---
 async def show_payment_details_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -159,7 +160,7 @@ async def show_payment_details_callback(update: Update, context: ContextTypes.DE
     await query.edit_message_text(msg, parse_mode="Markdown")
     return CONFIRM_PAYMENT
 
-# --- TO'LOV CHEKINI QABUL QILISH ---
+# --- RECEIVE RECEIPT ---
 async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     receipt_photo_id = None
@@ -208,7 +209,7 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ConversationHandler.END
 
-# --- ADMIN TUGMALARI ISHLOVCHILARI ---
+# --- ADMIN MENU HANDLER ---
 async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
@@ -257,7 +258,7 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             parse_mode="Markdown"
         )
 
-# --- INLINE CALLBACK HANDLER ---
+# --- GLOBAL INLINE CALLBACK HANDLER ---
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -288,7 +289,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ADMIN_SEND_FILE
 
-# --- ADMIN FAYL YUBORISHI ---
+# --- ADMIN SEND FILE ---
 async def send_file_from_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_user_id = context.user_data.get("target_user_id")
     if not target_user_id:
@@ -307,7 +308,7 @@ async def send_file_from_admin(update: Update, context: ContextTypes.DEFAULT_TYP
 
     return ConversationHandler.END
 
-# --- MIJOZ JAVOBI ---
+# --- USER REPLY TO ADMIN ---
 async def user_ask_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -328,7 +329,7 @@ async def send_user_reply_to_admin(update: Update, context: ContextTypes.DEFAULT
     await update.message.reply_text("✅ Xabaringiz adminga yetkazildi!")
     return ConversationHandler.END
 
-# --- KARTANI BOSQICHMA-BOSQICH YANGILASH ---
+# --- UPDATE CARD DETAILS ---
 async def save_card_holder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["new_card_holder"] = update.message.text.strip()
     await update.message.reply_text("💳 Endi **Karta raqami**ni kiriting (masalan: `8600123456789012`):", parse_mode="Markdown")
@@ -350,7 +351,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Jarayon bekor qilindi.", reply_markup=get_user_reply_keyboard())
     return ConversationHandler.END
 
-# --- ODDIY XABARLAR ---
+# --- DEFAULT MESSAGE HANDLER ---
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id == ADMIN_ID or (user.username and user.username.lower() == "bukhara05"):
@@ -416,26 +417,29 @@ def main():
                 MessageHandler(filters.Regex("^(📚 Kurs ishi|📝 Mustaqil ish|📑 Referat / Boshqa)$"), type_selected_text)
             ],
             GET_DETAILS: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, get_details_and_show_payment),
-                CallbackQueryHandler(go_back_callback, pattern="^go_back_to_menu$")
+                CallbackQueryHandler(go_back_callback, pattern="^go_back_to_menu$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_details_and_show_payment)
             ],
             CONFIRM_PAYMENT: [
                 CallbackQueryHandler(show_payment_details_callback, pattern="^show_payment_details$"),
                 MessageHandler(filters.PHOTO | filters.Document.ALL, receive_receipt)
             ]
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CommandHandler("start", start)
+        ],
         allow_reentry=True
     )
 
     app.add_handler(CommandHandler("admin", admin_command))
+    app.add_handler(conv_handler)
     app.add_handler(admin_send_file_handler)
     app.add_handler(user_reply_handler)
     app.add_handler(admin_card_handler)
     
     app.add_handler(MessageHandler(filters.Regex("^(📦 Barcha buyurtmalar|💳 Karta sozlamasi|ℹ️ Admin haqida)$") & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), admin_menu_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
-    app.add_handler(conv_handler)
     
     app.add_handler(MessageHandler(~filters.COMMAND & ~(filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), handle_user_messages))
 
