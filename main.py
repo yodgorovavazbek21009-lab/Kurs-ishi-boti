@@ -36,7 +36,7 @@ ADMIN_USERNAME = "@Bukhara05"
 ADMIN_ID = 6935366567
 
 # Bot holatlari (States)
-SELECT_TYPE, GET_DETAILS, GET_FILE, CONFIRM_PAYMENT, SET_CARD_STATE, SEND_WORK_STATE = range(6)
+SELECT_TYPE, GET_DETAILS, GET_FILE, CONFIRM_PAYMENT, SET_CARD_STATE, ADMIN_SEND_FILE, USER_REPLY_STATE = range(7)
 
 # Karta ma'lumotlari
 CARD_DATA = {
@@ -44,7 +44,7 @@ CARD_DATA = {
     "holder": "Biriktirilmagan"
 }
 
-# Buyurtmalar ro'yxati (xotirada saqlanadi)
+# Buyurtmalar ro'yxati
 ORDERS_LIST = []
 
 # --- ADMIN MENYUSI TUGMALARI ---
@@ -64,7 +64,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id == ADMIN_ID or (user.username and user.username.lower() == "bukhara05"):
         await update.message.reply_text(
             "👑 **Xush kelibsiz, Admin!**\n\n"
-            "Siz admin bo'lganingiz uchun buyurtma bera olmaysiz. Botni boshqarish va buyurtmalarni ko'rish uchun quyidagi paneldan foydalaning:",
+            "Siz admin bo'lganingiz uchun buyurtma bera olmaysiz. Boshqarish va buyurtmalarni ko'rish uchun quyidagi paneldan foydalaning:",
             reply_markup=get_admin_keyboard(),
             parse_mode="Markdown"
         )
@@ -112,42 +112,14 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if query.data == "admin_all_orders":
-        if not ORDERS_LIST:
-            msg = "📦 **Barcha buyurtmalar:**\n\nHozircha hech qanday buyurtma mavjud emas."
-            keyboard = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]]
-            await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-        else:
-            msg = f"📦 **Jami buyurtmalar soni:** {len(ORDERS_LIST)} ta\n"
-            msg += "📋 Tayyor bo'lgan ishni yuborish yoki keraksizini o'chirish uchun mos tugmani bosing:\n\n"
-            
-            keyboard = []
-            for idx, order in enumerate(ORDERS_LIST, 0):
-                msg += (
-                    f"**#{idx + 1} Buyurtma**\n"
-                    f"👤 Mijoz: [{order['user']}](tg://user?id={order['user_id']})\n"
-                    f"🔗 Username: @{order['username'] if order['username'] else 'Yo\'q'}\n"
-                    f"🆔 ID: `{order['user_id']}`\n"
-                    f"📌 Turi: {order['work_type']}\n"
-                    f"📝 Batafsil: {order['details']}\n"
-                    f"-------------------------------\n"
-                )
-                keyboard.append([
-                    InlineKeyboardButton(f"📤 Yuborish (#{idx + 1})", callback_data=f"send_to_{order['user_id']}"),
-                    InlineKeyboardButton(f"❌ O'chirish", callback_data=f"del_order_{idx}")
-                ])
-            
-            keyboard.append([InlineKeyboardButton("🗑 Barchasini tozalash", callback_data="clear_all_orders")])
-            keyboard.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")])
-            
-            await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+        await show_orders_list(query)
 
     elif query.data.startswith("del_order_"):
         idx = int(query.data.split("_")[2])
         if 0 <= idx < len(ORDERS_LIST):
-            deleted = ORDERS_LIST.pop(idx)
-            await query.answer(f"Buyurtma o'chirildi!", show_alert=True)
-        # Qayta ro'yxatni yangilash
-        await admin_callback_refresh_orders(query)
+            ORDERS_LIST.pop(idx)
+            await query.answer("Buyurtma o'chirildi!", show_alert=True)
+        await show_orders_list(query)
 
     elif query.data == "clear_all_orders":
         ORDERS_LIST.clear()
@@ -155,18 +127,18 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]]
         await query.edit_message_text("📦 **Barcha buyurtmalar:**\n\nRo'yxat to'liq tozalandi.", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
-    elif query.data.startswith("send_to_"):
-        target_id = query.data.split("_")[2]
-        context.user_data["target_user_id"] = int(target_id)
+    elif query.data.startswith("reply_to_"):
+        target_id = int(query.data.split("_")[2])
+        context.user_data["target_user_id"] = target_id
         
         keyboard = [[InlineKeyboardButton("❌ Bekor qilish", callback_data="admin_back")]]
         await query.edit_message_text(
-            f"📤 **Mijozga (ID: `{target_id}`) fayl yuborish rejimidasiz.**\n\n"
-            f"Iltimos, klientga yetkazilishi kerak bo'lgan tayyor **fayl, PDF, Word hujjat, rasm yoki matn** xabarini botga yuboring:",
+            f"📤 **Mijozga (ID: `{target_id}`) fayl yoki javob yuborish rejimidasiz.**\n\n"
+            f"Iltimos, klientga yetkazilishi kerak bo'lgan **fayl, PDF, Word hujjat, rasm yoki matn** xabarini botga yuboring:",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
-        return SEND_WORK_STATE
+        return ADMIN_SEND_FILE
 
     elif query.data == "admin_card_menu":
         msg = (
@@ -206,14 +178,14 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return SET_CARD_STATE
 
-async def admin_callback_refresh_orders(query):
+async def show_orders_list(query):
     if not ORDERS_LIST:
         msg = "📦 **Barcha buyurtmalar:**\n\nHozircha hech qanday buyurtma mavjud emas."
         keyboard = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]]
         await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
     else:
         msg = f"📦 **Jami buyurtmalar soni:** {len(ORDERS_LIST)} ta\n"
-        msg += "📋 Tayyor bo'lgan ishni yuborish yoki keraksizini o'chirish uchun mos tugmani bosing:\n\n"
+        msg += "📋 Tayyor bo'lgan ishni yuborish yoki o'chirish uchun tugmalardan foydalaning:\n\n"
         
         keyboard = []
         for idx, order in enumerate(ORDERS_LIST, 0):
@@ -227,7 +199,7 @@ async def admin_callback_refresh_orders(query):
                 f"-------------------------------\n"
             )
             keyboard.append([
-                InlineKeyboardButton(f"📤 Yuborish (#{idx + 1})", callback_data=f"send_to_{order['user_id']}"),
+                InlineKeyboardButton(f"📤 Fayl yuborish (#{idx + 1})", callback_data=f"reply_to_{order['user_id']}"),
                 InlineKeyboardButton(f"❌ O'chirish", callback_data=f"del_order_{idx}")
             ])
         
@@ -236,8 +208,8 @@ async def admin_callback_refresh_orders(query):
         
         await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
-# --- TUGMA ORQALI TANLANGAN KLIENTGA FAYL YUBORISH ---
-async def send_work_to_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# --- ADMIN TUGMA ORQALI FAYL YUBORISHI ---
+async def send_file_from_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
         return ConversationHandler.END
@@ -247,8 +219,12 @@ async def send_work_to_client(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("❌ Xatolik: Mijoz aniqlanmadi!")
         return ConversationHandler.END
 
+    client_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✍️ Adminga savol / xabar yuborish", callback_data="user_ask_admin")]
+    ])
+
     try:
-        await update.message.copy(chat_id=target_user_id)
+        await update.message.copy(chat_id=target_user_id, reply_markup=client_keyboard)
         await update.message.reply_text(
             f"✅ **Tayyor fayl/rasm mijozga (ID: `{target_user_id}`) muvaffaqiyatli yetkazildi!**",
             reply_markup=get_admin_keyboard(),
@@ -257,6 +233,39 @@ async def send_work_to_client(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         await update.message.reply_text(f"❌ Faylni yetkazishda xatolik: {e}")
 
+    return ConversationHandler.END
+
+# --- MIJOZ TUGMA ORQALI ADMINGA SAVOL YUBORISHI ---
+async def user_ask_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    await query.edit_message_reply_markup(reply_markup=None)
+    await query.message.reply_text(
+        "📝 **Adminga yubormoqchi bo'lgan xabaringiz yoki faylingizni kiriting:**\n"
+        "(Siz yuborgan ma'lumot to'g'ridan-to'g'ri adminga boradi)"
+    )
+    return USER_REPLY_STATE
+
+async def send_user_reply_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    
+    admin_btn = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💬 Javob berish / Fayl yuborish", callback_data=f"reply_to_{user.id}")]
+    ])
+
+    forwarded_msg = await update.message.forward(chat_id=ADMIN_ID)
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"📩 **MIJOZDAN YANGI XABAR!**\n\n"
+             f"👤 **Mijoz:** [{user.full_name}](tg://user?id={user.id})\n"
+             f"🆔 **ID:** `{user.id}`\n\n"
+             f"Javob berish uchun pastdagi tugmani bosing:",
+        reply_markup=admin_btn,
+        parse_mode="Markdown"
+    )
+
+    await update.message.reply_text("✅ Xabaringiz adminga yetkazildi! Admin tez orada javob beradi.")
     return ConversationHandler.END
 
 # --- KARTANI O'ZGARTIRISHNI SAQLASH ---
@@ -345,7 +354,6 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("🎉 Buyurtma qabul qilindi\nAdmin siz bilan bogʻlanadi")
 
-    # Buyurtmani ro'yxatga saqlash
     ORDERS_LIST.append({
         "user": user.full_name,
         "username": user.username,
@@ -361,10 +369,14 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🆔 **Mijoz ID:** `{user.id}`\n"
         f"📌 **Turi:** {context.user_data.get('work_type')}\n"
         f"📝 **Batafsil:** {context.user_data.get('details')}\n\n"
-        f"💬 **Mijozga javob berish uchun ushbu xabarga Reply (Javob berish) qiling yoki '📦 Barcha buyurtmalar' bo'limidan foydalaning.**"
+        f"💬 **Mijozga tayyor ishni yuborish uchun pastdagi tugmani bosing:**"
     )
 
-    await context.bot.send_photo(chat_id=ADMIN_ID, photo=receipt_photo_id, caption=admin_text, parse_mode="Markdown")
+    admin_btn = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💬 Javob berish / Fayl yuborish", callback_data=f"reply_to_{user.id}")]
+    ])
+
+    await context.bot.send_photo(chat_id=ADMIN_ID, photo=receipt_photo_id, caption=admin_text, reply_markup=admin_btn, parse_mode="Markdown")
 
     if "file_id" in context.user_data:
         ftype = context.user_data["file_type"]
@@ -379,46 +391,24 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Jarayon bekor qilindi.")
     return ConversationHandler.END
 
-# --- KLIENTDAN KELGAN XABAR VA FAYLLARNI ADMINGA FORWARD QILISH ---
+# --- KLIENT XABARLARINI ADMINGA YUBORISH ---
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id == ADMIN_ID or (user.username and user.username.lower() == "bukhara05"):
         return
 
+    admin_btn = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💬 Javob berish / Fayl yuborish", callback_data=f"reply_to_{user.id}")]
+    ])
+
     forwarded_msg = await update.message.forward(chat_id=ADMIN_ID)
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"👆 Mijoz: [{user.full_name}](tg://user?id={user.id}) | ID: `{user.id}`\nJavob berish yoki fayl yuborish uchun ushbu xabarga **Reply (Javob berish)** qiling.",
+        text=f"👆 Mijoz: [{user.full_name}](tg://user?id={user.id}) | ID: `{user.id}`\nJavob berish uchun pastdagi tugmani bosing:",
+        reply_markup=admin_btn,
         parse_mode="Markdown",
         reply_to_message_id=forwarded_msg.message_id
     )
-
-# --- ADMINDAN KLIENTGA REPLI ORQALI FAYL YUBORISH ---
-async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
-        return
-
-    if update.message.reply_to_message:
-        reply_msg = update.message.reply_to_message
-        target_user_id = None
-
-        if reply_msg.forward_from:
-            target_user_id = reply_msg.forward_from.id
-        
-        search_text = (reply_msg.text or "") + " " + (reply_msg.caption or "")
-        match = re.search(r"Mijoz ID[:\s]*`?(\d+)`?", search_text, re.IGNORECASE)
-        if match:
-            target_user_id = int(match.group(1))
-
-        if target_user_id:
-            try:
-                await update.message.copy(chat_id=target_user_id)
-                await update.message.reply_text("✅ Tayyor fayl/rasm mijozga muvaffaqiyatli yetkazildi!")
-            except Exception as e:
-                await update.message.reply_text(f"❌ Xatolik yuz berdi: {e}")
-        else:
-            await update.message.reply_text("⚠️ Mijoz ID si topilmadi. Iltimos, mijoz tushgan xabarga Reply (Javob berish) qiling.")
 
 def main():
     BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -426,23 +416,34 @@ def main():
         print("Xatolik: BOT_TOKEN topilmadi!")
         return
 
+    # Flask serverni ishga tushirish
     server_thread = Thread(target=run_flask)
     server_thread.daemon = True
     server_thread.start()
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Admin tugma orqali fayl yuborishi uchun handler
-    admin_send_work_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(admin_callback, pattern="^send_to_")],
+    # Admin tugma orqali fayl yuborishi uchun ConversationHandler
+    admin_send_file_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(admin_callback, pattern="^reply_to_")],
         states={
-            SEND_WORK_STATE: [MessageHandler(filters.ALL & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), send_work_to_client)]
+            ADMIN_SEND_FILE: [MessageHandler(filters.ALL & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), send_file_from_admin)]
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True
     )
 
-    # Admin karta sozlashi uchun handler
+    # Mijoz tugma orqali javob qaytarishi uchun ConversationHandler
+    user_reply_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(user_ask_callback, pattern="^user_ask_admin$")],
+        states={
+            USER_REPLY_STATE: [MessageHandler(filters.ALL & ~filters.COMMAND, send_user_reply_to_admin)]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        allow_reentry=True
+    )
+
+    # Admin karta sozlashi uchun ConversationHandler
     admin_card_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin_callback, pattern="^change_card_start$")],
         states={
@@ -452,7 +453,7 @@ def main():
         allow_reentry=True
     )
 
-    # Klientlar uchun handler
+    # Mijozlar uchun asosiy buyurtma ConversationHandler
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -468,7 +469,19 @@ def main():
         allow_reentry=True
     )
 
+    # Handlerlarni qo'shish
     app.add_handler(CommandHandler("admin", admin_command))
-    app.add_handler(admin_send_work_handler)
+    app.add_handler(admin_send_file_handler)
+    app.add_handler(user_reply_handler)
     app.add_handler(admin_card_handler)
-    app.add_handle
+    app.add_handler(CallbackQueryHandler(admin_callback, pattern="^(admin_|del_order_|clear_all_orders|admin_all_orders|admin_card_menu|admin_info|admin_back)"))
+    app.add_handler(conv_handler)
+    
+    app.add_handler(MessageHandler(~filters.COMMAND & ~(filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), handle_user_messages))
+
+    print("Bot muvaffaqiyatli ishga tushdi!")
+    app.run_polling(drop_pending_updates=True)
+
+if __name__ == "__main__":
+    main()
+    
