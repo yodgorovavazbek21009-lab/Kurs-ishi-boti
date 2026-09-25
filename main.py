@@ -4,7 +4,7 @@ import re
 from threading import Thread
 from flask import Flask
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -47,14 +47,21 @@ CARD_DATA = {
 # Buyurtmalar ro'yxati
 ORDERS_LIST = []
 
-# --- ADMIN MENYUSI TUGMALARI ---
-def get_admin_keyboard():
+# --- KLIENT UCHUN PASTKI TUGMALAR (RASMDAGIDEK) ---
+def get_user_reply_keyboard():
     keyboard = [
-        [InlineKeyboardButton("📦 Barcha buyurtmalar", callback_data="admin_all_orders")],
-        [InlineKeyboardButton("💳 Kartani ko'rish / o'zgartirish", callback_data="admin_card_menu")],
-        [InlineKeyboardButton("ℹ️ Admin haqida", callback_data="admin_info")]
+        [KeyboardButton("📚 Kurs ishi"), KeyboardButton("📝 Mustaqil ish")],
+        [KeyboardButton("📑 Referat / Boshqa"), KeyboardButton("ℹ️ Ma'lumot")]
     ]
-    return InlineKeyboardMarkup(keyboard)
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+# --- ADMIN UCHUN PASTKI TUGMALAR ---
+def get_admin_reply_keyboard():
+    keyboard = [
+        [KeyboardButton("📦 Barcha buyurtmalar"), KeyboardButton("💳 Karta sozlamasi")],
+        [KeyboardButton("ℹ️ Admin haqida")]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 # --- START (FOYDALANUVCHILAR VA ADMIN UCHUN) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -64,25 +71,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id == ADMIN_ID or (user.username and user.username.lower() == "bukhara05"):
         await update.message.reply_text(
             "👑 **Xush kelibsiz, Admin!**\n\n"
-            "Siz admin bo'lganingiz uchun buyurtma bera olmaysiz. Boshqarish va buyurtmalarni ko'rish uchun quyidagi paneldan foydalaning:",
-            reply_markup=get_admin_keyboard(),
+            "Botni boshqarish va buyurtmalarni ko'rish uchun pastdagi menyu tugmalaridan foydalaning:",
+            reply_markup=get_admin_reply_keyboard(),
             parse_mode="Markdown"
         )
         return ConversationHandler.END
 
-    # Admin bilan bog'lanish tugmasi olib tashlangan menyu
-    keyboard = [
-        [InlineKeyboardButton("📚 Kurs ishi", callback_data="type_Kurs ishi")],
-        [InlineKeyboardButton("📝 Mustaqil ish", callback_data="type_Mustaqil ish")],
-        [InlineKeyboardButton("📑 Referat / Boshqa", callback_data="type_Boshqa topshiriq")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
     await update.message.reply_text(
         "👋 **Xush kelibsiz!**\n\n"
         "Men orqali kurs ishlari, mustaqil ishlar va boshqa topshiriqlarga buyurtma berishingiz mumkin.\n"
-        "Boshlash uchun kerakli bo'limni tanlang:",
-        reply_markup=reply_markup,
+        "Boshlash uchun pastdagi tugmalardan birini tanlang:",
+        reply_markup=get_user_reply_keyboard(),
         parse_mode="Markdown"
     )
     return SELECT_TYPE
@@ -96,210 +95,16 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         "🛠 **Admin paneli:**",
-        reply_markup=get_admin_keyboard(),
+        reply_markup=get_admin_reply_keyboard(),
         parse_mode="Markdown"
     )
 
-# --- ADMIN TUGMALARI ISHLOVCHISI ---
-async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user = query.from_user
-
-    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
-        await query.answer("Sizga ruxsat berilmagan!", show_alert=True)
-        return
-
-    await query.answer()
-
-    if query.data == "admin_all_orders":
-        await show_orders_list(query)
-
-    elif query.data.startswith("del_order_"):
-        idx = int(query.data.split("_")[2])
-        if 0 <= idx < len(ORDERS_LIST):
-            ORDERS_LIST.pop(idx)
-            await query.answer("Buyurtma o'chirildi!", show_alert=True)
-        await show_orders_list(query)
-
-    elif query.data == "clear_all_orders":
-        ORDERS_LIST.clear()
-        await query.answer("Barcha buyurtmalar tozalandi!", show_alert=True)
-        keyboard = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]]
-        await query.edit_message_text("📦 **Barcha buyurtmalar:**\n\nRo'yxat to'liq tozalandi.", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-
-    elif query.data.startswith("reply_to_"):
-        target_id = int(query.data.split("_")[2])
-        context.user_data["target_user_id"] = target_id
-        
-        keyboard = [[InlineKeyboardButton("❌ Bekor qilish", callback_data="admin_back")]]
-        await query.edit_message_text(
-            f"📤 **Mijozga (ID: `{target_id}`) fayl yoki javob yuborish rejimidasiz.**\n\n"
-            f"Iltimos, klientga yetkazilishi kerak bo'lgan **fayl, PDF, Word hujjat, rasm yoki matn** xabarini botga yuboring:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
-        return ADMIN_SEND_FILE
-
-    elif query.data == "admin_card_menu":
-        msg = (
-            "💳 **Hozirgi karta ma'lumotlari:**\n\n"
-            f"• Raqami: `{CARD_DATA['number']}`\n"
-            f"• Egasining ismi: **{CARD_DATA['holder']}**\n\n"
-            "Kartani o'zgartirish uchun pastdagi tugmani bosing:"
-        )
-        keyboard = [
-            [InlineKeyboardButton("✏️ Kartani yangilash", callback_data="change_card_start")],
-            [InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]
-        ]
-        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-
-    elif query.data == "admin_info":
-        await query.edit_message_text(
-            f"👑 **Admin:** {ADMIN_USERNAME}\n"
-            f"🆔 **Admin ID:** `{ADMIN_ID}`\n\n"
-            f"📊 **Jami buyurtmalar soni:** {len(ORDERS_LIST)} ta",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]]),
-            parse_mode="Markdown"
-        )
-
-    elif query.data == "admin_back":
-        await query.edit_message_text(
-            "🛠 **Admin paneli:**",
-            reply_markup=get_admin_keyboard(),
-            parse_mode="Markdown"
-        )
-
-    elif query.data == "change_card_start":
-        await query.edit_message_text(
-            "📝 **Yangi karta ma'lumotlarini yuboring:**\n\n"
-            "Format: `KARTA_RAQAM ISMI`\n"
-            "Masalan: `8600123456789012 BAXODIR JUMAYEV`",
-            parse_mode="Markdown"
-        )
-        return SET_CARD_STATE
-
-async def show_orders_list(query):
-    if not ORDERS_LIST:
-        msg = "📦 **Barcha buyurtmalar:**\n\nHozircha hech qanday buyurtma mavjud emas."
-        keyboard = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]]
-        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-    else:
-        msg = f"📦 **Jami buyurtmalar soni:** {len(ORDERS_LIST)} ta\n"
-        msg += "📋 Tayyor bo'lgan ishni yuborish yoki o'chirish uchun tugmalardan foydalaning:\n\n"
-        
-        keyboard = []
-        for idx, order in enumerate(ORDERS_LIST, 0):
-            msg += (
-                f"**#{idx + 1} Buyurtma**\n"
-                f"👤 Mijoz: [{order['user']}](tg://user?id={order['user_id']})\n"
-                f"🔗 Username: @{order['username'] if order['username'] else 'Yo\'q'}\n"
-                f"🆔 ID: `{order['user_id']}`\n"
-                f"📌 Turi: {order['work_type']}\n"
-                f"📝 Batafsil: {order['details']}\n"
-                f"-------------------------------\n"
-            )
-            keyboard.append([
-                InlineKeyboardButton(f"📤 Fayl yuborish (#{idx + 1})", callback_data=f"reply_to_{order['user_id']}"),
-                InlineKeyboardButton(f"❌ O'chirish", callback_data=f"del_order_{idx}")
-            ])
-        
-        keyboard.append([InlineKeyboardButton("🗑 Barchasini tozalash", callback_data="clear_all_orders")])
-        keyboard.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")])
-        
-        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-
-# --- ADMIN TUGMA ORQALI FAYL YUBORISHI ---
-async def send_file_from_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
-        return ConversationHandler.END
-
-    target_user_id = context.user_data.get("target_user_id")
-    if not target_user_id:
-        await update.message.reply_text("❌ Xatolik: Mijoz aniqlanmadi!")
-        return ConversationHandler.END
-
-    client_keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✍️ Adminga savol / xabar yuborish", callback_data="user_ask_admin")]
-    ])
-
-    try:
-        await update.message.copy(chat_id=target_user_id, reply_markup=client_keyboard)
-        await update.message.reply_text(
-            f"✅ **Tayyor fayl/rasm mijozga (ID: `{target_user_id}`) muvaffaqiyatli yetkazildi!**",
-            reply_markup=get_admin_keyboard(),
-            parse_mode="Markdown"
-        )
-    except Exception as e:
-        await update.message.reply_text(f"❌ Faylni yetkazishda xatolik: {e}")
-
-    return ConversationHandler.END
-
-# --- MIJOZ TUGMA ORQALI ADMINGA SAVOL YUBORISHI ---
-async def user_ask_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    await query.edit_message_reply_markup(reply_markup=None)
-    await query.message.reply_text(
-        "📝 **Adminga yubormoqchi bo'lgan xabaringiz yoki faylingizni kiriting:**\n"
-        "(Siz yuborgan ma'lumot to'g'ridan-to'g'ri adminga boradi)"
-    )
-    return USER_REPLY_STATE
-
-async def send_user_reply_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    
-    admin_btn = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💬 Javob berish / Fayl yuborish", callback_data=f"reply_to_{user.id}")]
-    ])
-
-    forwarded_msg = await update.message.forward(chat_id=ADMIN_ID)
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"📩 **MIJOZDAN YANGI XABAR!**\n\n"
-             f"👤 **Mijoz:** [{user.full_name}](tg://user?id={user.id})\n"
-             f"🆔 **ID:** `{user.id}`\n\n"
-             f"Javob berish uchun pastdagi tugmani bosing:",
-        reply_markup=admin_btn,
-        parse_mode="Markdown"
-    )
-
-    await update.message.reply_text("✅ Xabaringiz adminga yetkazildi! Admin tez orada javob beradi.")
-    return ConversationHandler.END
-
-# --- KARTANI O'ZGARTIRISHNI SAQLASH ---
-async def save_new_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
-        return ConversationHandler.END
-
-    text = update.message.text.strip().split(maxsplit=1)
-    if len(text) < 2:
-        await update.message.reply_text("❌ Noto'g'ri format! Iltimos, karta raqami va ismini birga yuboring.\nMasalan: `8600123456789012 BAXODIR JUMAYEV`", parse_mode="Markdown")
-        return SET_CARD_STATE
-
-    CARD_DATA["number"] = text[0]
-    CARD_DATA["holder"] = text[1]
-
-    await update.message.reply_text(
-        f"✅ **Karta muvaffaqiyatli yangilandi!**\n\n"
-        f"Raqami: `{CARD_DATA['number']}`\n"
-        f"Egasi: **{CARD_DATA['holder']}**",
-        reply_markup=get_admin_keyboard(),
-        parse_mode="Markdown"
-    )
-    return ConversationHandler.END
-
-# --- BUYURTMA OLISH JARAYONI ---
-async def type_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    work_type = query.data.split("_")[1]
+# --- BUYURTMA TURI SECHILGANDA ---
+async def type_selected_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    work_type = update.message.text.replace("📚 ", "").replace("📝 ", "").replace("📑 ", "")
     context.user_data["work_type"] = work_type
     
-    await query.edit_message_text(
+    await update.message.reply_text(
         f"✅ Tanlandi: **{work_type}**\n\n"
         "Iltimos, topshiriq haqida batafsil ma'lumot yuboring:\n"
         "• Fan nomi\n• Mavzu\n• Necha bet\n• Deadline",
@@ -352,7 +157,10 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Iltimos, to'lov chekini rasm ko'rinishida yuboring.")
         return CONFIRM_PAYMENT
 
-    await update.message.reply_text("🎉 Buyurtma qabul qilindi\nAdmin siz bilan bogʻlanadi")
+    await update.message.reply_text(
+        "🎉 Buyurtma qabul qilindi\nAdmin siz bilan bogʻlanadi",
+        reply_markup=get_user_reply_keyboard()
+    )
 
     ORDERS_LIST.append({
         "user": user.full_name,
@@ -387,24 +195,150 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ConversationHandler.END
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Jarayon bekor qilindi.")
+# --- ADMIN TUGMALARI ISHLOVCHILARI ---
+async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
+        return
+
+    text = update.message.text
+
+    if text == "📦 Barcha buyurtmalar":
+        if not ORDERS_LIST:
+            await update.message.reply_text("📦 **Barcha buyurtmalar:**\n\nHozircha hech qanday buyurtma mavjud emas.", parse_mode="Markdown")
+        else:
+            msg = f"📦 **Jami buyurtmalar soni:** {len(ORDERS_LIST)} ta\n\n"
+            keyboard = []
+            for idx, order in enumerate(ORDERS_LIST, 0):
+                msg += (
+                    f"**#{idx + 1} Buyurtma**\n"
+                    f"👤 Mijoz: [{order['user']}](tg://user?id={order['user_id']})\n"
+                    f"🔗 Username: @{order['username'] if order['username'] else 'Yo\'q'}\n"
+                    f"🆔 ID: `{order['user_id']}`\n"
+                    f"📌 Turi: {order['work_type']}\n"
+                    f"📝 Batafsil: {order['details']}\n"
+                    f"-------------------------------\n"
+                )
+                keyboard.append([
+                    InlineKeyboardButton(f"📤 Fayl yuborish (#{idx + 1})", callback_data=f"reply_to_{order['user_id']}"),
+                    InlineKeyboardButton(f"❌ O'chirish", callback_data=f"del_order_{idx}")
+                ])
+            keyboard.append([InlineKeyboardButton("🗑 Barchasini tozalash", callback_data="clear_all_orders")])
+            await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+    elif text == "💳 Karta sozlamasi":
+        msg = (
+            "💳 **Hozirgi karta ma'lumotlari:**\n\n"
+            f"• Raqami: `{CARD_DATA['number']}`\n"
+            f"• Egasining ismi: **{CARD_DATA['holder']}**\n\n"
+            "Kartani o'zgartirish uchun pastdagi tugmani bosing:"
+        )
+        keyboard = [[InlineKeyboardButton("✏️ Kartani yangilash", callback_data="change_card_start")]]
+        await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+    elif text == "ℹ️ Admin haqida":
+        await update.message.reply_text(
+            f"👑 **Admin:** {ADMIN_USERNAME}\n"
+            f"🆔 **Admin ID:** `{ADMIN_ID}`\n\n"
+            f"📊 **Jami buyurtmalar soni:** {len(ORDERS_LIST)} ta",
+            parse_mode="Markdown"
+        )
+
+# --- INLINE CALLBACK HANDLER ---
+async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data.startswith("del_order_"):
+        idx = int(query.data.split("_")[2])
+        if 0 <= idx < len(ORDERS_LIST):
+            ORDERS_LIST.pop(idx)
+            await query.answer("Buyurtma o'chirildi!", show_alert=True)
+            await query.edit_message_text("✅ Buyurtma muvaffaqiyatli o'chirildi!")
+
+    elif query.data == "clear_all_orders":
+        ORDERS_LIST.clear()
+        await query.answer("Barcha buyurtmalar tozalandi!", show_alert=True)
+        await query.edit_message_text("📦 **Barcha buyurtmalar to'liq tozalandi!**")
+
+    elif query.data.startswith("reply_to_"):
+        target_id = int(query.data.split("_")[2])
+        context.user_data["target_user_id"] = target_id
+        await query.edit_message_text(
+            f"📤 **Mijozga (ID: `{target_id}`) fayl yoki javob yuborish rejimidasiz.**\n\n"
+            f"Iltimos, klientga yetkazilishi kerak bo'lgan **fayl, PDF, Word, rasm yoki matn**ni yuboring:",
+            parse_mode="Markdown"
+        )
+        return ADMIN_SEND_FILE
+
+# --- ADMIN FAYL YUBORISHI ---
+async def send_file_from_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target_user_id = context.user_data.get("target_user_id")
+    if not target_user_id:
+        await update.message.reply_text("❌ Xatolik: Mijoz aniqlanmadi!")
+        return ConversationHandler.END
+
+    client_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✍️ Adminga savol yuborish", callback_data="user_ask_admin")]
+    ])
+
+    try:
+        await update.message.copy(chat_id=target_user_id, reply_markup=client_keyboard)
+        await update.message.reply_text(f"✅ **Tayyor fayl/rasm mijozga (ID: `{target_user_id}`) muvaffaqiyatli yetkazildi!**", parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Faylni yetkazishda xatolik: {e}")
+
     return ConversationHandler.END
 
-# --- KLIENT XABARLARINI ADMINGA YUBORISH ---
+# --- MIJOZ JAVOBI ---
+async def user_ask_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("📝 **Adminga yubormoqchi bo'lgan xabaringiz yoki faylingizni kiriting:**")
+    return USER_REPLY_STATE
+
+async def send_user_reply_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    admin_btn = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Javob berish / Fayl yuborish", callback_data=f"reply_to_{user.id}")]])
+
+    forwarded_msg = await update.message.forward(chat_id=ADMIN_ID)
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"📩 **MIJOZDAN YANGI XABAR!**\n👤 **Mijoz:** [{user.full_name}](tg://user?id={user.id})\n🆔 **ID:** `{user.id}`",
+        reply_markup=admin_btn,
+        parse_mode="Markdown"
+    )
+    await update.message.reply_text("✅ Xabaringiz adminga yetkazildi!")
+    return ConversationHandler.END
+
+# --- KARTANI YANGILASH ---
+async def save_new_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip().split(maxsplit=1)
+    if len(text) < 2:
+        await update.message.reply_text("❌ Noto'g'ri format! Masalan: `8600123456789012 BAXODIR JUMAYEV`", parse_mode="Markdown")
+        return SET_CARD_STATE
+
+    CARD_DATA["number"] = text[0]
+    CARD_DATA["holder"] = text[1]
+
+    await update.message.reply_text(f"✅ **Karta yangilandi!**\nRaqami: `{CARD_DATA['number']}`\nEgasi: **{CARD_DATA['holder']}**", parse_mode="Markdown")
+    return ConversationHandler.END
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Jarayon bekor qilindi.", reply_markup=get_user_reply_keyboard())
+    return ConversationHandler.END
+
+# --- ODDY XABARLAR ---
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id == ADMIN_ID or (user.username and user.username.lower() == "bukhara05"):
         return
 
-    admin_btn = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💬 Javob berish / Fayl yuborish", callback_data=f"reply_to_{user.id}")]
-    ])
-
+    admin_btn = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Javob berish / Fayl yuborish", callback_data=f"reply_to_{user.id}")]])
     forwarded_msg = await update.message.forward(chat_id=ADMIN_ID)
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"👆 Mijoz: [{user.full_name}](tg://user?id={user.id}) | ID: `{user.id}`\nJavob berish uchun pastdagi tugmani bosing:",
+        text=f"👆 Mijoz: [{user.full_name}](tg://user?id={user.id}) | ID: `{user.id}`",
         reply_markup=admin_btn,
         parse_mode="Markdown",
         reply_to_message_id=forwarded_msg.message_id
@@ -423,7 +357,7 @@ def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     admin_send_file_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(admin_callback, pattern="^reply_to_")],
+        entry_points=[CallbackQueryHandler(callback_handler, pattern="^reply_to_")],
         states={
             ADMIN_SEND_FILE: [MessageHandler(filters.ALL & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), send_file_from_admin)]
         },
@@ -441,7 +375,7 @@ def main():
     )
 
     admin_card_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(admin_callback, pattern="^change_card_start$")],
+        entry_points=[CallbackQueryHandler(callback_handler, pattern="^change_card_start$")],
         states={
             SET_CARD_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), save_new_card)]
         },
@@ -450,9 +384,11 @@ def main():
     )
 
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
+        entry_points=[
+            CommandHandler("start", start),
+            MessageHandler(filters.Regex("^(📚 Kurs ishi|📝 Mustaqil ish|📑 Referat / Boshqa)$"), type_selected_text)
+        ],
         states={
-            SELECT_TYPE: [CallbackQueryHandler(type_selected, pattern="^type_")],
             GET_DETAILS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_details)],
             GET_FILE: [
                 MessageHandler(filters.Document.ALL | filters.PHOTO, get_file_and_show_payment),
@@ -468,7 +404,9 @@ def main():
     app.add_handler(admin_send_file_handler)
     app.add_handler(user_reply_handler)
     app.add_handler(admin_card_handler)
-    app.add_handler(CallbackQueryHandler(admin_callback, pattern="^(admin_|del_order_|clear_all_orders|admin_all_orders|admin_card_menu|admin_info|admin_back)"))
+    
+    app.add_handler(MessageHandler(filters.Regex("^(📦 Barcha buyurtmalar|💳 Karta sozlamasi|ℹ️ Admin haqida)$") & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), admin_menu_handler))
+    app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(conv_handler)
     
     app.add_handler(MessageHandler(~filters.COMMAND & ~(filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), handle_user_messages))
@@ -478,4 +416,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-            
+    
