@@ -125,32 +125,44 @@ async def get_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return GET_FILE
 
-# --- MAVZU/FAYL TOPSHIRILGANDA TUGMA ORQALI TO'LOVGA O'TISH ---
-async def prompt_payment_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message:
-        if update.message.document:
-            context.user_data["file_id"] = update.message.document.file_id
-            context.user_data["file_type"] = "document"
-        elif update.message.photo:
-            context.user_data["file_id"] = update.message.photo[-1].file_id
-            context.user_data["file_type"] = "photo"
-    
+# --- FAYL YUBORILGANDA TO'LOV TUGMASINI CHIQARISH ---
+async def receive_file_and_prompt_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.document:
+        context.user_data["file_id"] = update.message.document.file_id
+        context.user_data["file_type"] = "document"
+    elif update.message.photo:
+        context.user_data["file_id"] = update.message.photo[-1].file_id
+        context.user_data["file_type"] = "photo"
+
     pay_btn = InlineKeyboardMarkup([
         [InlineKeyboardButton("💳 To'lov rekvizitlari", callback_data="show_payment_details")]
     ])
 
-    msg = (
+    await update.message.reply_text(
+        "🎉 **Topshiriq ma'lumotlari va fayli qabul qilindi!**\n\n"
+        "Admin tez orada siz bilan bog'lanadi.\n"
+        "To'lovni amalga oshirish va chekni yuborish uchun pastdagi tugmani bosing:",
+        reply_markup=pay_btn,
+        parse_mode="Markdown"
+    )
+    return CONFIRM_PAYMENT
+
+# --- "FAYLSIZ DAVOM ETISH" TUGMASI BOSILGANDA ---
+async def skip_file_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    pay_btn = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💳 To'lov rekvizitlari", callback_data="show_payment_details")]
+    ])
+
+    await query.edit_message_text(
         "🎉 **Topshiriq ma'lumotlari qabul qilindi!**\n\n"
         "Admin tez orada siz bilan bog'lanadi.\n"
-        "To'lovni amalga oshirish va chekni yuborish uchun pastdagi tugmani bosing:"
+        "To'lovni amalga oshirish va chekni yuborish uchun pastdagi tugmani bosing:",
+        reply_markup=pay_btn,
+        parse_mode="Markdown"
     )
-
-    if update.callback_query:
-        await update.callback_query.answer()
-        await update.callback_query.edit_message_text(msg, reply_markup=pay_btn, parse_mode="Markdown")
-    else:
-        await update.message.reply_text(msg, reply_markup=pay_btn, parse_mode="Markdown")
-        
     return CONFIRM_PAYMENT
 
 # --- TO'LOV REKVIZITLARINI KO'RSATISH ---
@@ -429,8 +441,8 @@ def main():
         states={
             GET_DETAILS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_details)],
             GET_FILE: [
-                MessageHandler(filters.Document.ALL | filters.PHOTO, prompt_payment_button),
-                CallbackQueryHandler(prompt_payment_button, pattern="^skip_file$")
+                MessageHandler(filters.Document.ALL | filters.PHOTO, receive_file_and_prompt_payment),
+                CallbackQueryHandler(skip_file_callback, pattern="^skip_file$")
             ],
             CONFIRM_PAYMENT: [
                 CallbackQueryHandler(show_payment_details_callback, pattern="^show_payment_details$"),
@@ -457,4 +469,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
