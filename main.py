@@ -36,7 +36,7 @@ ADMIN_USERNAME = "@Bukhara05"
 ADMIN_ID = 6935366567
 
 # Bot holatlari (States)
-SELECT_TYPE, GET_DETAILS, GET_FILE, CONFIRM_PAYMENT, SET_CARD_HOLDER, SET_CARD_NUMBER, ADMIN_SEND_FILE, USER_REPLY_STATE = range(8)
+SELECT_TYPE, GET_DETAILS, CONFIRM_PAYMENT, SET_CARD_HOLDER, SET_CARD_NUMBER, ADMIN_SEND_FILE, USER_REPLY_STATE = range(7)
 
 # Karta ma'lumotlari
 CARD_DATA = {
@@ -99,67 +99,47 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# --- BUYURTMA TURI SECHILGANDA ---
+# --- BUYURTMA TURI SECHILGANDA (ORQAGA TUGMASI BILAN) ---
 async def type_selected_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     work_type = update.message.text.replace("📚 ", "").replace("📝 ", "").replace("📑 ", "")
     context.user_data["work_type"] = work_type
+    
+    back_btn = InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Orqaga", callback_data="go_back_to_menu")]
+    ])
     
     await update.message.reply_text(
         f"✅ Tanlandi: **{work_type}**\n\n"
         "Iltimos, topshiriq haqida batafsil ma'lumot yuboring:\n"
         "• Fan nomi\n• Mavzu\n• Necha bet\n• Deadline",
+        reply_markup=back_btn,
         parse_mode="Markdown"
     )
     return GET_DETAILS
 
-async def get_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["details"] = update.message.text
-    
-    keyboard = [[InlineKeyboardButton("⏭ Faylsiz davom etish", callback_data="skip_file")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text(
-        "Mavzuga oid fayl bo'lsa yuboring yoki **'Faylsiz davom etish'** bosing:",
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
-    )
-    return GET_FILE
-
-# --- FAYL YUBORILGANDA TO'LOV TUGMASINI CHIQARISH ---
-async def receive_file_and_prompt_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.document:
-        context.user_data["file_id"] = update.message.document.file_id
-        context.user_data["file_type"] = "document"
-    elif update.message.photo:
-        context.user_data["file_id"] = update.message.photo[-1].file_id
-        context.user_data["file_type"] = "photo"
-
-    pay_btn = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💳 To'lov rekvizitlari", callback_data="show_payment_details")]
-    ])
-
-    await update.message.reply_text(
-        "🎉 **Topshiriq ma'lumotlari va fayli qabul qilindi!**\n\n"
-        "Admin tez orada siz bilan bog'lanadi.\n"
-        "To'lovni amalga oshirish va chekni yuborish uchun pastdagi tugmani bosing:",
-        reply_markup=pay_btn,
-        parse_mode="Markdown"
-    )
-    return CONFIRM_PAYMENT
-
-# --- "FAYLSIZ DAVOM ETISH" TUGMASI BOSILGANDA ---
-async def skip_file_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# --- "ORQAGA" TUGMASI ISHLOVCHISI ---
+async def go_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
+    await query.message.reply_text(
+        "🔄 Asosiy menyuga qaytdingiz. Qayta tanlang:",
+        reply_markup=get_user_reply_keyboard()
+    )
+    return SELECT_TYPE
 
+# --- MATN YUBORILGANDA SHUNDAY TO'LOV TUGMASI CHIQADI ---
+async def get_details_and_show_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["details"] = update.message.text
+    
     pay_btn = InlineKeyboardMarkup([
         [InlineKeyboardButton("💳 To'lov rekvizitlari", callback_data="show_payment_details")]
     ])
 
-    await query.edit_message_text(
+    await update.message.reply_text(
         "🎉 **Topshiriq ma'lumotlari qabul qilindi!**\n\n"
         "Admin tez orada siz bilan bog'lanadi.\n"
-        "To'lovni amalga oshirish va chekni yuborish uchun pastdagi tugmani bosing:",
+        "To'lovni amalga oshirish uchun pastdagi tugmani bosing:",
         reply_markup=pay_btn,
         parse_mode="Markdown"
     )
@@ -225,13 +205,6 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_photo(chat_id=ADMIN_ID, photo=receipt_photo_id, caption=admin_text, reply_markup=admin_btn, parse_mode="Markdown")
     elif receipt_doc_id:
         await context.bot.send_document(chat_id=ADMIN_ID, document=receipt_doc_id, caption=admin_text, reply_markup=admin_btn, parse_mode="Markdown")
-
-    if "file_id" in context.user_data:
-        ftype = context.user_data["file_type"]
-        if ftype == "document":
-            await context.bot.send_document(chat_id=ADMIN_ID, document=context.user_data["file_id"], caption=f"📎 Topshiriq fayli\nMijoz ID: `{user.id}`", parse_mode="Markdown")
-        elif ftype == "photo":
-            await context.bot.send_photo(chat_id=ADMIN_ID, photo=context.user_data["file_id"], caption=f"📎 Topshiriq rasmi\nMijoz ID: `{user.id}`", parse_mode="Markdown")
 
     return ConversationHandler.END
 
@@ -439,10 +412,12 @@ def main():
             MessageHandler(filters.Regex("^(📚 Kurs ishi|📝 Mustaqil ish|📑 Referat / Boshqa)$"), type_selected_text)
         ],
         states={
-            GET_DETAILS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_details)],
-            GET_FILE: [
-                MessageHandler(filters.Document.ALL | filters.PHOTO, receive_file_and_prompt_payment),
-                CallbackQueryHandler(skip_file_callback, pattern="^skip_file$")
+            SELECT_TYPE: [
+                MessageHandler(filters.Regex("^(📚 Kurs ishi|📝 Mustaqil ish|📑 Referat / Boshqa)$"), type_selected_text)
+            ],
+            GET_DETAILS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_details_and_show_payment),
+                CallbackQueryHandler(go_back_callback, pattern="^go_back_to_menu$")
             ],
             CONFIRM_PAYMENT: [
                 CallbackQueryHandler(show_payment_details_callback, pattern="^show_payment_details$"),
@@ -469,3 +444,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
