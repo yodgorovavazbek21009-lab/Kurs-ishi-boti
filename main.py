@@ -70,11 +70,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ConversationHandler.END
 
+    # Admin bilan bog'lanish tugmasi olib tashlangan menyu
     keyboard = [
         [InlineKeyboardButton("📚 Kurs ishi", callback_data="type_Kurs ishi")],
         [InlineKeyboardButton("📝 Mustaqil ish", callback_data="type_Mustaqil ish")],
-        [InlineKeyboardButton("📑 Referat / Boshqa", callback_data="type_Boshqa topshiriq")],
-        [InlineKeyboardButton("📞 Admin bilan bog'lanish", url=f"https://t.me/{ADMIN_USERNAME.replace('@', '')}")]
+        [InlineKeyboardButton("📑 Referat / Boshqa", callback_data="type_Boshqa topshiriq")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -416,14 +416,12 @@ def main():
         print("Xatolik: BOT_TOKEN topilmadi!")
         return
 
-    # Flask serverni ishga tushirish
     server_thread = Thread(target=run_flask)
     server_thread.daemon = True
     server_thread.start()
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Admin tugma orqali fayl yuborishi uchun ConversationHandler
     admin_send_file_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin_callback, pattern="^reply_to_")],
         states={
@@ -433,7 +431,6 @@ def main():
         allow_reentry=True
     )
 
-    # Mijoz tugma orqali javob qaytarishi uchun ConversationHandler
     user_reply_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(user_ask_callback, pattern="^user_ask_admin$")],
         states={
@@ -443,7 +440,6 @@ def main():
         allow_reentry=True
     )
 
-    # Admin karta sozlashi uchun ConversationHandler
     admin_card_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin_callback, pattern="^change_card_start$")],
         states={
@@ -453,7 +449,6 @@ def main():
         allow_reentry=True
     )
 
-    # Mijozlar uchun asosiy buyurtma ConversationHandler
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -469,7 +464,6 @@ def main():
         allow_reentry=True
     )
 
-    # Handlerlarni qo'shish
     app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(admin_send_file_handler)
     app.add_handler(user_reply_handler)
@@ -484,4 +478,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+            
