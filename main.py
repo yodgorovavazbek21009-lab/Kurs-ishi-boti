@@ -30,9 +30,9 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-# ADMIN MA'LUMOTLARI
-ADMIN_USERNAME = "@ttmg_2024"
-ADMIN_ID = 7323566567
+# YANGI ADMIN MA'LUMOTLARI
+ADMIN_USERNAME = "@Bukhara05"
+ADMIN_ID = 6935366567
 
 # Bot holatlari (States)
 SELECT_TYPE, GET_DETAILS, GET_FILE, CONFIRM_PAYMENT, SET_CARD_STATE = range(5)
@@ -60,7 +60,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     
-    if user_id == ADMIN_ID or (user.username and user.username.lower() == "ttmg_2024"):
+    if user_id == ADMIN_ID or (user.username and user.username.lower() == "bukhara05"):
         await update.message.reply_text(
             "👑 **Xush kelibsiz, Admin!**\n\n"
             "Siz admin bo'lganingiz uchun buyurtma bera olmaysiz. Botni boshqarish va buyurtmalarni ko'rish uchun quyidagi paneldan foydalaning:",
@@ -89,7 +89,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- ADMIN BUYRUG'I (/admin) ---
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "ttmg_2024"):
+    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
         await update.message.reply_text("❌ Siz admin emassiz!")
         return
 
@@ -104,7 +104,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user = query.from_user
 
-    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "ttmg_2024"):
+    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
         await query.answer("Sizga ruxsat berilmagan!", show_alert=True)
         return
 
@@ -168,7 +168,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- KARTANI O'ZGARTIRISHNI SAQLASH ---
 async def save_new_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "ttmg_2024"):
+    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
         return ConversationHandler.END
 
     text = update.message.text.strip().split(maxsplit=1)
@@ -218,7 +218,6 @@ async def get_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return GET_FILE
 
 async def get_file_and_show_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Klient topshiriq faylini tashlasa saqlab olamiz
     if update.message:
         if update.message.document:
             context.user_data["file_id"] = update.message.document.file_id
@@ -250,7 +249,6 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Iltimos, to'lov chekini rasm ko'rinishida yuboring.")
         return CONFIRM_PAYMENT
 
-    # Mijozga boradigan xabar
     await update.message.reply_text("🎉 Buyurtma qabul qilindi\nAdmin siz bilan bogʻlanadi")
 
     ORDERS_LIST.append({
@@ -269,10 +267,8 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💬 **Mijozga tayyor ishni (PDF, fayl, rasm) yuborish uchun ushbu xabarga Reply (Javob berish) qiling.**"
     )
 
-    # Adminga chekni yuborish
     await context.bot.send_photo(chat_id=ADMIN_ID, photo=receipt_photo_id, caption=admin_text, parse_mode="Markdown")
 
-    # Agar klient topshiriq faylini yuborgan bo'lsa, uni ham adminga yetkazamiz
     if "file_id" in context.user_data:
         ftype = context.user_data["file_type"]
         if ftype == "document":
@@ -286,10 +282,10 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Jarayon bekor qilindi.")
     return ConversationHandler.END
 
-# --- KLIENTDAN KELGAN ISTALGAN XABAR VA FAYLLARNI ADMINGA YUBORISH ---
+# --- KLIENTDAN KELGAN XABAR VA FAYLLARNI ADMINGA YUBORISH ---
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id == ADMIN_ID or (user.username and user.username.lower() == "ttmg_2024"):
+    if user.id == ADMIN_ID or (user.username and user.username.lower() == "bukhara05"):
         return
 
     forwarded_msg = await update.message.forward(chat_id=ADMIN_ID)
@@ -300,10 +296,10 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_to_message_id=forwarded_msg.message_id
     )
 
-# --- ADMINDAN KLIENTGA TAYYOR BUYURTMA FAYLINI VA XABARLARNI YUBORISH ---
+# --- ADMINDAN KLIENTGA FAYL VA XABARLARNI YUBORISH ---
 async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "ttmg_2024"):
+    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
         return
 
     if update.message.reply_to_message:
@@ -322,7 +318,6 @@ async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         if target_user_id:
             try:
-                # Admin Reply qilib yuborgan barcha fayl, PDF, rasm va matnlarni klientga nusxalaydi
                 await update.message.copy(chat_id=target_user_id)
                 await update.message.reply_text("✅ Tayyor ish / faylingiz klientga yetkazildi!")
             except Exception as e:
@@ -345,7 +340,7 @@ def main():
     admin_card_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin_callback, pattern="^change_card_start$")],
         states={
-            SET_CARD_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), save_new_card)]
+            SET_CARD_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), save_new_card)]
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True
@@ -371,15 +366,12 @@ def main():
     app.add_handler(CallbackQueryHandler(admin_callback, pattern="^(admin_|change_card_)"))
     app.add_handler(conv_handler)
     
-    # Admin javoblariga ishlov beruvchi (Admindan klientga fayl boradi)
-    app.add_handler(MessageHandler(filters.REPLY & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), handle_admin_reply))
-    
-    # Klient xabarlariga ishlov beruvchi (Klientdan admimga fayl boradi)
-    app.add_handler(MessageHandler(~filters.COMMAND & ~(filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), handle_user_messages))
+    app.add_handler(MessageHandler(filters.REPLY & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), handle_admin_reply))
+    app.add_handler(MessageHandler(~filters.COMMAND & ~(filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), handle_user_messages))
 
     print("Bot muvaffaqiyatli ishga tushdi!")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
-            
+    
