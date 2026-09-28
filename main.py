@@ -15,7 +15,7 @@ from telegram.ext import (
     filters,
 )
 
-# Render & UptimeRobot web server (Flask)
+# Render & UptimeRobot uchun veb-server (Flask)
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -31,23 +31,23 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-# ADMIN INFO
+# ADMIN MA'LUMOTLARI
 ADMIN_USERNAME = "@Bukhara05"
 ADMIN_ID = 6935366567
 
-# Bot States
+# Bot holatlari (States)
 SELECT_TYPE, GET_DETAILS, CONFIRM_PAYMENT, SET_CARD_HOLDER, SET_CARD_NUMBER, ADMIN_SEND_FILE, USER_REPLY_STATE = range(7)
 
-# Card details
+# Karta ma'lumotlari
 CARD_DATA = {
     "number": "Biriktirilmagan",
     "holder": "Biriktirilmagan"
 }
 
-# Orders list
+# Buyurtmalar ro'yxati
 ORDERS_LIST = []
 
-# --- USER REPLY KEYBOARD ---
+# --- KLIENT UCHUN PASTKI TUGMALAR ---
 def get_user_reply_keyboard():
     keyboard = [
         [KeyboardButton("📚 Kurs ishi"), KeyboardButton("📝 Mustaqil ish")],
@@ -55,7 +55,7 @@ def get_user_reply_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# --- ADMIN REPLY KEYBOARD ---
+# --- ADMIN UCHUN PASTKI TUGMALAR ---
 def get_admin_reply_keyboard():
     keyboard = [
         [KeyboardButton("📦 Barcha buyurtmalar"), KeyboardButton("💳 Karta sozlamasi")],
@@ -63,7 +63,7 @@ def get_admin_reply_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# --- START ---
+# --- START (FOYDALANUVCHILAR VA ADMIN UCHUN) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
@@ -86,7 +86,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return SELECT_TYPE
 
-# --- ADMIN COMMAND (/admin) ---
+# --- ADMIN BUYRUG'I (/admin) ---
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
@@ -99,7 +99,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# --- SELECT WORK TYPE ---
+# --- BUYURTMA TURI SECHILGANDA ---
 async def type_selected_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     work_type = update.message.text.replace("📚 ", "").replace("📝 ", "").replace("📑 ", "")
     context.user_data["work_type"] = work_type
@@ -117,7 +117,7 @@ async def type_selected_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
     return GET_DETAILS
 
-# --- BACK BUTTON CALLBACK ---
+# --- "ORQAGA" TUGMASI ISHLOVCHISI ---
 async def go_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -129,26 +129,26 @@ async def go_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return SELECT_TYPE
 
-# --- RECEIVE DETAILS AND SHOW PAYMENT BUTTON ---
+# --- MATN YUBORILGANDA ADMINGA XABAR VA TO'LOV TUGMASI CHIQADI ---
 async def get_details_and_show_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     details_text = update.message.text
     context.user_data["details"] = details_text
     
-    # 1. Mijozga javob berish
+    # 1. Mijozga ko'rinadigan xabar va inline tugma
     pay_btn = InlineKeyboardMarkup([
         [InlineKeyboardButton("💳 To'lov rekvizitlari", callback_data="show_payment_details")]
     ])
 
     await update.message.reply_text(
         "🎉 **Topshiriq ma'lumotlari qabul qilindi!**\n\n"
-        "Admin tez orada siz bilan bog'lanadi.\n"
-        "To'lovni amalga oshirish uchun pastdagi tugmani bosing:",
+        "Admin tahlil qilib sizga narxni yuboradi. "
+        "To'lov rekvizitlari orqali to'lovni amalga oshirasiz.",
         reply_markup=pay_btn,
         parse_mode="Markdown"
     )
 
-    # 2. ADMINGA DARHOL XABAR BORISHI
+    # 2. Adminga topshiriq va mijoz haqida xabar borishi
     admin_text = (
         f"📥 **YANGI TOPSHIRIQ MAVZUSI KELDI!**\n\n"
         f"👤 **Mijoz:** [{user.full_name}](tg://user?id={user.id})\n"
@@ -156,11 +156,11 @@ async def get_details_and_show_payment(update: Update, context: ContextTypes.DEF
         f"🆔 **Mijoz ID:** `{user.id}`\n"
         f"📌 **Turi:** {context.user_data.get('work_type')}\n"
         f"📝 **Batafsil:** {details_text}\n\n"
-        f"⚠️ *Mijoz to'lov qilish bosqichida.*"
+        f"⚠️ *Mijozga narxni belgilab yuborishingiz kutilmoqda.*"
     )
 
     admin_btn = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💬 Javob berish / Fayl yuborish", callback_data=f"reply_to_{user.id}")]
+        [InlineKeyboardButton("💬 Javob berish / Narx yuborish", callback_data=f"reply_to_{user.id}")]
     ])
 
     try:
@@ -175,7 +175,7 @@ async def get_details_and_show_payment(update: Update, context: ContextTypes.DEF
 
     return CONFIRM_PAYMENT
 
-# --- SHOW PAYMENT DETAILS ---
+# --- TO'LOV REKVIZITLARINI KO'RSATISH ---
 async def show_payment_details_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -189,7 +189,7 @@ async def show_payment_details_callback(update: Update, context: ContextTypes.DE
     await query.edit_message_text(msg, parse_mode="Markdown")
     return CONFIRM_PAYMENT
 
-# --- RECEIVE RECEIPT ---
+# --- TO'LOV CHEKINI QABUL QILISH ---
 async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     receipt_photo_id = None
@@ -238,7 +238,7 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ConversationHandler.END
 
-# --- ADMIN MENU HANDLER ---
+# --- ADMIN TUGMALARI ISHLOVCHILARI ---
 async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
@@ -287,7 +287,7 @@ async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             parse_mode="Markdown"
         )
 
-# --- GLOBAL INLINE CALLBACK HANDLER ---
+# --- INLINE CALLBACK HANDLER ---
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -318,7 +318,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ADMIN_SEND_FILE
 
-# --- ADMIN SEND FILE ---
+# --- ADMIN FAYL YUBORISHI ---
 async def send_file_from_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_user_id = context.user_data.get("target_user_id")
     if not target_user_id:
@@ -337,7 +337,7 @@ async def send_file_from_admin(update: Update, context: ContextTypes.DEFAULT_TYP
 
     return ConversationHandler.END
 
-# --- USER REPLY TO ADMIN ---
+# --- MIJOZ JAVOBI ---
 async def user_ask_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -358,7 +358,7 @@ async def send_user_reply_to_admin(update: Update, context: ContextTypes.DEFAULT
     await update.message.reply_text("✅ Xabaringiz adminga yetkazildi!")
     return ConversationHandler.END
 
-# --- UPDATE CARD DETAILS ---
+# --- KARTANI BOSQICHMA-BOSQICH YANGILASH ---
 async def save_card_holder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["new_card_holder"] = update.message.text.strip()
     await update.message.reply_text("💳 Endi **Karta raqami**ni kiriting (masalan: `8600123456789012`):", parse_mode="Markdown")
@@ -380,7 +380,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Jarayon bekor qilindi.", reply_markup=get_user_reply_keyboard())
     return ConversationHandler.END
 
-# --- DEFAULT MESSAGE HANDLER ---
+# --- ODDIY XABARLAR ---
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id == ADMIN_ID or (user.username and user.username.lower() == "bukhara05"):
@@ -477,3 +477,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
