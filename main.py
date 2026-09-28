@@ -15,17 +15,6 @@ from telegram.ext import (
     filters,
 )
 
-# --- GOOGLE GEMINI AI ULASH ---
-import google.generativeai as genai
-
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    ai_model = genai.GenerativeModel('gemini-1.5-flash')
-else:
-    ai_model = None
-    print("OGOHLANTIRISH: GEMINI_API_KEY topilmadi. AI rejim ishlamasligi mumkin.")
-
 # Render & UptimeRobot web server (Flask)
 web_app = Flask(__name__)
 
@@ -91,7 +80,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 **Xush kelibsiz!**\n\n"
         "Men orqali kurs ishlari, mustaqil ishlar va boshqa topshiriqlarga buyurtma berishingiz mumkin.\n"
-        "Shuningdek, menga xohlagan savolingizni berishingiz mumkin (AI yordam beradi)!\n\n"
         "Boshlash uchun pastdagi tugmalardan birini tanlang:",
         reply_markup=get_user_reply_keyboard(),
         parse_mode="Markdown"
@@ -143,8 +131,11 @@ async def go_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- RECEIVE DETAILS AND SHOW PAYMENT BUTTON ---
 async def get_details_and_show_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["details"] = update.message.text
+    user = update.effective_user
+    details_text = update.message.text
+    context.user_data["details"] = details_text
     
+    # 1. Mijozga javob berish
     pay_btn = InlineKeyboardMarkup([
         [InlineKeyboardButton("💳 To'lov rekvizitlari", callback_data="show_payment_details")]
     ])
@@ -156,6 +147,32 @@ async def get_details_and_show_payment(update: Update, context: ContextTypes.DEF
         reply_markup=pay_btn,
         parse_mode="Markdown"
     )
+
+    # 2. ADMINGA DARHOL XABAR BORISHI
+    admin_text = (
+        f"📥 **YANGI TOPSHIRIQ MAVZUSI KELDI!**\n\n"
+        f"👤 **Mijoz:** [{user.full_name}](tg://user?id={user.id})\n"
+        f"🔗 **Username:** @{user.username if user.username else 'Yo\'q'}\n"
+        f"🆔 **Mijoz ID:** `{user.id}`\n"
+        f"📌 **Turi:** {context.user_data.get('work_type')}\n"
+        f"📝 **Batafsil:** {details_text}\n\n"
+        f"⚠️ *Mijoz to'lov qilish bosqichida.*"
+    )
+
+    admin_btn = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💬 Javob berish / Fayl yuborish", callback_data=f"reply_to_{user.id}")]
+    ])
+
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=admin_text,
+            reply_markup=admin_btn,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logging.error(f"Adminga mavzu xabarini yuborishda xatolik: {e}")
+
     return CONFIRM_PAYMENT
 
 # --- SHOW PAYMENT DETAILS ---
@@ -363,13 +380,12 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Jarayon bekor qilindi.", reply_markup=get_user_reply_keyboard())
     return ConversationHandler.END
 
-# --- DEFAULT MESSAGE HANDLER (AI INTEGRATION INCLUDED) ---
+# --- DEFAULT MESSAGE HANDLER ---
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id == ADMIN_ID or (user.username and user.username.lower() == "bukhara05"):
         return
 
-    # 1. Xabarni adminga forward qilish (eski funksionallik buzilmagan)
     admin_btn = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Javob berish / Fayl yuborish", callback_data=f"reply_to_{user.id}")]])
     forwarded_msg = await update.message.forward(chat_id=ADMIN_ID)
     await context.bot.send_message(
@@ -379,19 +395,6 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
         parse_mode="Markdown",
         reply_to_message_id=forwarded_msg.message_id
     )
-
-    # 2. SUN'IY INTELEKT (GEMINI) ORQALI JAVOB BERISH
-    if update.message.text and ai_model:
-        # Bot yozayotganini ko'rsatish
-        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        
-        try:
-            response = ai_model.generate_content(update.message.text)
-            ai_reply = response.text
-            await update.message.reply_text(ai_reply)
-        except Exception as e:
-            logging.error(f"Gemini AI Error: {e}")
-            await update.message.reply_text("🤖 Savolingiz qabul qilindi va adminga yetkazildi!")
 
 def main():
     BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -467,7 +470,6 @@ def main():
     app.add_handler(MessageHandler(filters.Regex("^(📦 Barcha buyurtmalar|💳 Karta sozlamasi|ℹ️ Admin haqida)$") & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), admin_menu_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     
-    # Barcha oddiy matnlarga AI javob beradi va xabarni adminga ham yuboradi
     app.add_handler(MessageHandler(~filters.COMMAND & ~(filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), handle_user_messages))
 
     print("Bot muvaffaqiyatli ishga tushdi!")
@@ -475,4 +477,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
