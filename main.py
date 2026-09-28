@@ -47,9 +47,18 @@ CARD_DATA = {
 # Buyurtmalar ro'yxati
 ORDERS_LIST = []
 
-# --- KLIENT UCHUN PASTKI TUGMALAR ---
+# --- KLIENT UCHUN PASTKI TUGMALAR (ASOSIY MENYU) ---
 def get_user_reply_keyboard():
     keyboard = [
+        [KeyboardButton("📚 Kurs ishi"), KeyboardButton("📝 Mustaqil ish")],
+        [KeyboardButton("📑 Referat / Boshqa")]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+# --- KLIENT UCHUN TO'LOV REKVIZITLARI MAVJUD PASTKI TUGMA ---
+def get_user_payment_reply_keyboard():
+    keyboard = [
+        [KeyboardButton("💳 To'lov rekvizitlari")],
         [KeyboardButton("📚 Kurs ishi"), KeyboardButton("📝 Mustaqil ish")],
         [KeyboardButton("📑 Referat / Boshqa")]
     ]
@@ -129,25 +138,21 @@ async def go_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return SELECT_TYPE
 
-# --- MATN YUBORILGANDA ADMINGA XABAR VA TO'LOV TUGMASI CHIQADI ---
+# --- MATN YUBORILGANDA ADMINGA XABAR VA PASTKI TUGMAGA TO'LOV REKVIZITLARI QO'SHILADI ---
 async def get_details_and_show_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     details_text = update.message.text
     context.user_data["details"] = details_text
-    
-    # 1. Mijozga ko'rinadigan xabar va inline tugma
-    pay_btn = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💳 To'lov rekvizitlari", callback_data="show_payment_details")]
-    ])
 
+    # Mijozga bildirishnoma va pastki tugmalarga "To'lov rekvizitlari" tugmasini qo'shib berish
     await update.message.reply_text(
         "🎉 **Topshiriq ma'lumotlari qabul qilindi!**\n\n"
         "Admin tahlil qilib sizga narxni yuboradi to'lov rekvizitlari orqali to'lovni amalga oshirasiz.",
-        reply_markup=pay_btn,
+        reply_markup=get_user_payment_reply_keyboard(),
         parse_mode="Markdown"
     )
 
-    # 2. Adminga topshiriq va mijoz haqida xabar borishi
+    # Adminga topshiriq va mijoz haqida xabar borishi
     admin_text = (
         f"📥 **YANGI TOPSHIRIQ MAVZUSI KELDI!**\n\n"
         f"👤 **Mijoz:** [{user.full_name}](tg://user?id={user.id})\n"
@@ -174,18 +179,15 @@ async def get_details_and_show_payment(update: Update, context: ContextTypes.DEF
 
     return CONFIRM_PAYMENT
 
-# --- TO'LOV REKVIZITLARINI KO'RSATISH ---
-async def show_payment_details_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
+# --- TO'LOV REKVIZITLARINI KO'RSATISH (PASTKI TUGMA ORQALI) ---
+async def show_payment_details_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "💳 **To'lov rekvizitlari:**\n\n"
         f"Karta raqami: `{CARD_DATA['number']}`\n"
         f"Egalik qiluvchi: **{CARD_DATA['holder']}**\n\n"
         "To'lovni amalga oshirib, chekni (rasm yoki PDF fayl ko'rinishida) shu yerga yuboring."
     )
-    await query.edit_message_text(msg, parse_mode="Markdown")
+    await update.message.reply_text(msg, parse_mode="Markdown")
     return CONFIRM_PAYMENT
 
 # --- TO'LOV CHEKINI QABUL QILISH ---
@@ -449,7 +451,7 @@ def main():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, get_details_and_show_payment)
             ],
             CONFIRM_PAYMENT: [
-                CallbackQueryHandler(show_payment_details_callback, pattern="^show_payment_details$"),
+                MessageHandler(filters.Regex("^💳 To'lov rekvizitlari$"), show_payment_details_text),
                 MessageHandler(filters.PHOTO | filters.Document.ALL, receive_receipt)
             ]
         },
