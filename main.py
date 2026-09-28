@@ -31,9 +31,9 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-# ADMIN MA'LUMOTLARI
-ADMIN_USERNAME = "@Bukhara05"
-ADMIN_ID = 6935366567
+# ADMIN MA'LUMOTLARI (YANGI ID VA USERNAME BILAN)
+ADMIN_USERNAME = "@ttmg_2024"
+ADMIN_ID = 6220470834
 
 # Bot holatlari (States)
 SELECT_TYPE, GET_DETAILS, CONFIRM_PAYMENT, SET_CARD_HOLDER, SET_CARD_NUMBER, ADMIN_SEND_FILE, USER_REPLY_STATE = range(7)
@@ -77,7 +77,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     
-    if user_id == ADMIN_ID or (user.username and user.username.lower() == "bukhara05"):
+    if user_id == ADMIN_ID or (user.username and user.username.lower() == "ttmg_2024"):
         await update.message.reply_text(
             "👑 **Xush kelibsiz, Admin!**\n\n"
             "Botni boshqarish va buyurtmalarni ko'rish uchun pastdagi menyu tugmalaridan foydalaning:",
@@ -98,7 +98,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- ADMIN BUYRUG'I (/admin) ---
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
+    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "ttmg_2024"):
         await update.message.reply_text("❌ Siz admin emassiz!")
         return
 
@@ -242,7 +242,7 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- ADMIN TUGMALARI ISHLOVCHILARI ---
 async def admin_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "bukhara05"):
+    if user.id != ADMIN_ID and (not user.username or user.username.lower() != "ttmg_2024"):
         return
 
     text = update.message.text
@@ -384,7 +384,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- ODDIY XABARLAR ---
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id == ADMIN_ID or (user.username and user.username.lower() == "bukhara05"):
+    if user.id == ADMIN_ID or (user.username and user.username.lower() == "ttmg_2024"):
         return
 
     admin_btn = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Javob berish / Fayl yuborish", callback_data=f"reply_to_{user.id}")]])
@@ -412,7 +412,7 @@ def main():
     admin_send_file_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(callback_handler, pattern="^reply_to_")],
         states={
-            ADMIN_SEND_FILE: [MessageHandler(filters.ALL & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), send_file_from_admin)]
+            ADMIN_SEND_FILE: [MessageHandler(filters.ALL & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), send_file_from_admin)]
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True
@@ -430,8 +430,8 @@ def main():
     admin_card_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(callback_handler, pattern="^change_card_start$")],
         states={
-            SET_CARD_HOLDER: [MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), save_card_holder)],
-            SET_CARD_NUMBER: [MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), save_card_number)],
+            SET_CARD_HOLDER: [MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), save_card_holder)],
+            SET_CARD_NUMBER: [MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), save_card_number)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True
@@ -468,10 +468,10 @@ def main():
     app.add_handler(user_reply_handler)
     app.add_handler(admin_card_handler)
     
-    app.add_handler(MessageHandler(filters.Regex("^(📦 Barcha buyurtmalar|💳 Karta sozlamasi|ℹ️ Admin haqida)$") & (filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), admin_menu_handler))
+    app.add_handler(MessageHandler(filters.Regex("^(📦 Barcha buyurtmalar|💳 Karta sozlamasi|ℹ️ Admin haqida)$") & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), admin_menu_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     
-    app.add_handler(MessageHandler(~filters.COMMAND & ~(filters.User(ADMIN_ID) | filters.User(username="@Bukhara05")), handle_user_messages))
+    app.add_handler(MessageHandler(~filters.COMMAND & ~(filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), handle_user_messages))
 
     print("Bot muvaffaqiyatli ishga tushdi!")
     app.run_polling(drop_pending_updates=True)
