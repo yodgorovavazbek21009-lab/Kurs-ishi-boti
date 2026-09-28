@@ -15,6 +15,10 @@ from telegram.ext import (
     filters,
 )
 
+# PDF <-> WORD konvertatsiya uchun
+from pdf2docx import Converter
+from docx import Document
+
 # Render & UptimeRobot uchun veb-server (Flask)
 web_app = Flask(__name__)
 
@@ -31,12 +35,22 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-# ADMIN MA'LUMOTLARI (YANGI ID VA USERNAME BILAN)
+# ADMIN MA'LUMOTLARI
 ADMIN_USERNAME = "@ttmg_2024"
 ADMIN_ID = 6220470834
 
 # Bot holatlari (States)
-SELECT_TYPE, GET_DETAILS, CONFIRM_PAYMENT, SET_CARD_HOLDER, SET_CARD_NUMBER, ADMIN_SEND_FILE, USER_REPLY_STATE = range(7)
+(
+    SELECT_TYPE,
+    GET_DETAILS,
+    CONFIRM_PAYMENT,
+    SET_CARD_HOLDER,
+    SET_CARD_NUMBER,
+    ADMIN_SEND_FILE,
+    USER_REPLY_STATE,
+    CONVERT_PDF_TO_WORD,
+    CONVERT_WORD_TO_PDF,
+) = range(9)
 
 # Karta ma'lumotlari
 CARD_DATA = {
@@ -51,7 +65,8 @@ ORDERS_LIST = []
 def get_user_reply_keyboard():
     keyboard = [
         [KeyboardButton("📚 Kurs ishi"), KeyboardButton("📝 Mustaqil ish")],
-        [KeyboardButton("📑 Referat / Boshqa")]
+        [KeyboardButton("📑 Referat / Boshqa")],
+        [KeyboardButton("📄 Word -> PDF"), KeyboardButton("📑 PDF -> Word")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -60,7 +75,8 @@ def get_user_payment_reply_keyboard():
     keyboard = [
         [KeyboardButton("💳 To'lov rekvizitlari")],
         [KeyboardButton("📚 Kurs ishi"), KeyboardButton("📝 Mustaqil ish")],
-        [KeyboardButton("📑 Referat / Boshqa")]
+        [KeyboardButton("📑 Referat / Boshqa")],
+        [KeyboardButton("📄 Word -> PDF"), KeyboardButton("📑 PDF -> Word")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -88,7 +104,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         "👋 **Xush kelibsiz!**\n\n"
-        "Men orqali kurs ishlari, mustaqil ishlar va boshqa topshiriqlarga buyurtma berishingiz mumkin.\n"
+        "Men orqali kurs ishlari, mustaqil ishlar va boshqa topshiriqlarga buyurtma berishingiz hamda fayllaringizni PDF/Word formatlarga o'tkazishingiz mumkin.\n"
         "Boshlash uchun pastdagi tugmalardan birini tanlang:",
         reply_markup=get_user_reply_keyboard(),
         parse_mode="Markdown"
@@ -144,7 +160,6 @@ async def get_details_and_show_payment(update: Update, context: ContextTypes.DEF
     details_text = update.message.text
     context.user_data["details"] = details_text
 
-    # Mijozga bildirishnoma va pastki tugmalarga "To'lov rekvizitlari" tugmasini qo'shib berish
     await update.message.reply_text(
         "🎉 **Topshiriq ma'lumotlari qabul qilindi!**\n\n"
         "Admin tahlil qilib sizga narxni yuboradi to'lov rekvizitlari orqali to'lovni amalga oshirasiz.",
@@ -152,7 +167,6 @@ async def get_details_and_show_payment(update: Update, context: ContextTypes.DEF
         parse_mode="Markdown"
     )
 
-    # Adminga topshiriq va mijoz haqida xabar borishi
     admin_text = (
         f"📥 **YANGI TOPSHIRIQ MAVZUSI KELDI!**\n\n"
         f"👤 **Mijoz:** [{user.full_name}](tg://user?id={user.id})\n"
@@ -179,7 +193,7 @@ async def get_details_and_show_payment(update: Update, context: ContextTypes.DEF
 
     return CONFIRM_PAYMENT
 
-# --- TO'LOV REKVIZITLARINI KO'RSATISH (PASTKI TUGMA ORQALI) ---
+# --- TO'LOV REKVIZITLARINI KO'RSATISH ---
 async def show_payment_details_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "💳 **To'lov rekvizitlari:**\n\n"
@@ -236,6 +250,104 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_photo(chat_id=ADMIN_ID, photo=receipt_photo_id, caption=admin_text, reply_markup=admin_btn, parse_mode="Markdown")
     elif receipt_doc_id:
         await context.bot.send_document(chat_id=ADMIN_ID, document=receipt_doc_id, caption=admin_text, reply_markup=admin_btn, parse_mode="Markdown")
+
+    return ConversationHandler.END
+
+# --- KONVERTATSIYA TUGMALARI BO'LIMI ---
+async def start_pdf_to_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="go_back_to_menu")]])
+    await update.message.reply_text(
+        "📑 **PDF -> Word rejimi:**\n\nIltimos, Word-ga o'tkazmoqchi bo'lgan **PDF** faylingizni yuboring:",
+        reply_markup=back_btn,
+        parse_mode="Markdown"
+    )
+    return CONVERT_PDF_TO_WORD
+
+async def start_word_to_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="go_back_to_menu")]])
+    await update.message.reply_text(
+        "📄 **Word -> PDF rejimi:**\n\nIltimos, PDF-ga o'tkazmoqchi bo'lgan **Word (.docx)** faylingizni yuboring:",
+        reply_markup=back_btn,
+        parse_mode="Markdown"
+    )
+    return CONVERT_WORD_TO_PDF
+
+# --- PDF -> WORD KONVERTATSIYASI ---
+async def handle_pdf_to_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message.document or not update.message.document.file_name.lower().endswith('.pdf'):
+        await update.message.reply_text("❌ Iltimos, faqat `.pdf` formatidagi fayl yuboring!")
+        return CONVERT_PDF_TO_WORD
+
+    msg = await update.message.reply_text("⏳ PDF fayl Word ga o'tkazilmoqda, kuting...")
+    
+    pdf_file = await update.message.document.get_file()
+    pdf_path = f"temp_{update.effective_user.id}.pdf"
+    docx_path = f"converted_{update.effective_user.id}.docx"
+    
+    await pdf_file.download_to_drive(pdf_path)
+
+    try:
+        cv = Converter(pdf_path)
+        cv.convert(docx_path, start=0, end=None)
+        cv.close()
+
+        await update.message.reply_document(
+            document=open(docx_path, 'rb'),
+            filename=f"{update.message.document.file_name.rsplit('.', 1)[0]}.docx",
+            caption="✅ **Faylingiz Word formatiga o'tkazildi!**",
+            reply_markup=get_user_reply_keyboard(),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        await update.message.reply_text(f"❌ Faylni o'tkazishda xatolik yuz berdi: {e}")
+    finally:
+        if os.path.exists(pdf_path):
+            os.remove(pdf_path)
+        if os.path.exists(docx_path):
+            os.remove(docx_path)
+        await msg.delete()
+
+    return ConversationHandler.END
+
+# --- WORD -> PDF KONVERTATSIYASI ---
+async def handle_word_to_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    doc_name = update.message.document.file_name.lower() if update.message.document else ""
+    if not update.message.document or not (doc_name.endswith('.docx') or doc_name.endswith('.doc')):
+        await update.message.reply_text("❌ Iltimos, faqat `.docx` yoki `.doc` formatidagi Word fayl yuboring!")
+        return CONVERT_WORD_TO_PDF
+
+    msg = await update.message.reply_text("⏳ Word fayli PDF ga o'tkazilmoqda, kuting...")
+
+    word_file = await update.message.document.get_file()
+    docx_path = f"temp_{update.effective_user.id}.docx"
+    pdf_path = f"converted_{update.effective_user.id}.pdf"
+
+    await word_file.download_to_drive(docx_path)
+
+    try:
+        # Tizimda LibreOffice orqali konvertatsiya qilish
+        exit_code = os.system(f"soffice --headless --convert-to pdf {docx_path} --outdir .")
+        temp_converted_pdf = docx_path.replace('.docx', '.pdf').replace('.doc', '.pdf')
+        
+        if os.path.exists(temp_converted_pdf):
+            os.rename(temp_converted_pdf, pdf_path)
+            await update.message.reply_document(
+                document=open(pdf_path, 'rb'),
+                filename=f"{update.message.document.file_name.rsplit('.', 1)[0]}.pdf",
+                caption="✅ **Faylingiz PDF formatiga o'tkazildi!**",
+                reply_markup=get_user_reply_keyboard(),
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text("❌ Serverda LibreOffice topilmadi yoki konvertatsiya qilishda xatolik yuz berdi.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Faylni o'tkazishda xatolik yuz berdi: {e}")
+    finally:
+        if os.path.exists(docx_path):
+            os.remove(docx_path)
+        if os.path.exists(pdf_path):
+            os.remove(pdf_path)
+        await msg.delete()
 
     return ConversationHandler.END
 
@@ -380,102 +492,4 @@ async def save_card_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Jarayon bekor qilindi.", reply_markup=get_user_reply_keyboard())
     return ConversationHandler.END
-
-# --- ODDIY XABARLAR ---
-async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if user.id == ADMIN_ID or (user.username and user.username.lower() == "ttmg_2024"):
-        return
-
-    admin_btn = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Javob berish / Fayl yuborish", callback_data=f"reply_to_{user.id}")]])
-    forwarded_msg = await update.message.forward(chat_id=ADMIN_ID)
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"👆 Mijoz: [{user.full_name}](tg://user?id={user.id}) | ID: `{user.id}`",
-        reply_markup=admin_btn,
-        parse_mode="Markdown",
-        reply_to_message_id=forwarded_msg.message_id
-    )
-
-def main():
-    BOT_TOKEN = os.getenv("BOT_TOKEN")
-    if not BOT_TOKEN:
-        print("Xatolik: BOT_TOKEN topilmadi!")
-        return
-
-    server_thread = Thread(target=run_flask)
-    server_thread.daemon = True
-    server_thread.start()
-
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    admin_send_file_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(callback_handler, pattern="^reply_to_")],
-        states={
-            ADMIN_SEND_FILE: [MessageHandler(filters.ALL & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), send_file_from_admin)]
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-        allow_reentry=True
-    )
-
-    user_reply_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(user_ask_callback, pattern="^user_ask_admin$")],
-        states={
-            USER_REPLY_STATE: [MessageHandler(filters.ALL & ~filters.COMMAND, send_user_reply_to_admin)]
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-        allow_reentry=True
-    )
-
-    admin_card_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(callback_handler, pattern="^change_card_start$")],
-        states={
-            SET_CARD_HOLDER: [MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), save_card_holder)],
-            SET_CARD_NUMBER: [MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), save_card_number)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-        allow_reentry=True
-    )
-
-    conv_handler = ConversationHandler(
-        entry_points=[
-            CommandHandler("start", start),
-            MessageHandler(filters.Regex("^(📚 Kurs ishi|📝 Mustaqil ish|📑 Referat / Boshqa)$"), type_selected_text)
-        ],
-        states={
-            SELECT_TYPE: [
-                MessageHandler(filters.Regex("^(📚 Kurs ishi|📝 Mustaqil ish|📑 Referat / Boshqa)$"), type_selected_text)
-            ],
-            GET_DETAILS: [
-                CallbackQueryHandler(go_back_callback, pattern="^go_back_to_menu$"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, get_details_and_show_payment)
-            ],
-            CONFIRM_PAYMENT: [
-                MessageHandler(filters.Regex("^💳 To'lov rekvizitlari$"), show_payment_details_text),
-                MessageHandler(filters.PHOTO | filters.Document.ALL, receive_receipt)
-            ]
-        },
-        fallbacks=[
-            CommandHandler("cancel", cancel),
-            CommandHandler("start", start)
-        ],
-        allow_reentry=True
-    )
-
-    app.add_handler(CommandHandler("admin", admin_command))
-    app.add_handler(conv_handler)
-    app.add_handler(admin_send_file_handler)
-    app.add_handler(user_reply_handler)
-    app.add_handler(admin_card_handler)
-    
-    app.add_handler(MessageHandler(filters.Regex("^(📦 Barcha buyurtmalar|💳 Karta sozlamasi|ℹ️ Admin haqida)$") & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), admin_menu_handler))
-    app.add_handler(CallbackQueryHandler(callback_handler))
-    
-    app.add_handler(MessageHandler(~filters.COMMAND & ~(filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), handle_user_messages))
-
-    print("Bot muvaffaqiyatli ishga tushdi!")
-    app.run_polling(drop_pending_updates=True)
-
-if __name__ == "__main__":
-    main()
     
