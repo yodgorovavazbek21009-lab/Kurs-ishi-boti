@@ -142,8 +142,7 @@ async def get_details_and_show_payment(update: Update, context: ContextTypes.DEF
 
     await update.message.reply_text(
         "🎉 **Topshiriq ma'lumotlari qabul qilindi!**\n\n"
-        "Admin tahlil qilib sizga narxni yuboradi. "
-        "To'lov rekvizitlari orqali to'lovni amalga oshirasiz.",
+        "Admin tahlil qilib sizga narxni yuboradi to'lov rekvizitlari orqali to'lovni amalga oshirasiz.",
         reply_markup=pay_btn,
         parse_mode="Markdown"
     )
