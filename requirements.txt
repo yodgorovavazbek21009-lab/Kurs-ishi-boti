@@ -2,3 +2,8 @@ python-telegram-bot
 flask
 gunicorn
 google-generativeai
+python-telegram-bot
+Flask
+gunicorn
+pdf2docx
+python-docx
