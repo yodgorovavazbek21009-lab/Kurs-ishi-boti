@@ -17,7 +17,6 @@ from telegram.ext import (
 
 # PDF <-> WORD konvertatsiya uchun
 from pdf2docx import Converter
-from docx import Document
 
 # Render & UptimeRobot uchun veb-server (Flask)
 web_app = Flask(__name__)
@@ -88,7 +87,7 @@ def get_admin_reply_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# --- START (FOYDALANUVCHILAR VA ADMIN UCHUN) ---
+# --- START ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
@@ -253,11 +252,11 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ConversationHandler.END
 
-# --- KONVERTATSIYA TUGMALARI BO'LIMI ---
+# --- KONVERTATSIYA REJIMLARINI BOSHLASH ---
 async def start_pdf_to_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="go_back_to_menu")]])
     await update.message.reply_text(
-        "📑 **PDF -> Word rejimi:**\n\nIltimos, Word-ga o'tkazmoqchi bo'lgan **PDF** faylingizni yuboring:",
+        "📑 **PDF -> Word rejimi:**\n\nIltimos, Word formatiga o'tkazmoqchi bo'lgan **PDF** faylingizni yuboring:",
         reply_markup=back_btn,
         parse_mode="Markdown"
     )
@@ -266,19 +265,19 @@ async def start_pdf_to_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_word_to_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
     back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="go_back_to_menu")]])
     await update.message.reply_text(
-        "📄 **Word -> PDF rejimi:**\n\nIltimos, PDF-ga o'tkazmoqchi bo'lgan **Word (.docx)** faylingizni yuboring:",
+        "📄 **Word -> PDF rejimi:**\n\nIltimos, PDF formatiga o'tkazmoqchi bo'lgan **Word (.docx)** faylingizni yuboring:",
         reply_markup=back_btn,
         parse_mode="Markdown"
     )
     return CONVERT_WORD_TO_PDF
 
-# --- PDF -> WORD KONVERTATSIYASI ---
+# --- PDF -> WORD KONVERTATSIYA ISHLOVCHISI ---
 async def handle_pdf_to_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.document or not update.message.document.file_name.lower().endswith('.pdf'):
         await update.message.reply_text("❌ Iltimos, faqat `.pdf` formatidagi fayl yuboring!")
         return CONVERT_PDF_TO_WORD
 
-    msg = await update.message.reply_text("⏳ PDF fayl Word ga o'tkazilmoqda, kuting...")
+    msg = await update.message.reply_text("⏳ PDF faylingiz Word formatiga o'tkazilmoqda, kuting...")
     
     pdf_file = await update.message.document.get_file()
     pdf_path = f"temp_{update.effective_user.id}.pdf"
@@ -294,7 +293,7 @@ async def handle_pdf_to_word(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_document(
             document=open(docx_path, 'rb'),
             filename=f"{update.message.document.file_name.rsplit('.', 1)[0]}.docx",
-            caption="✅ **Faylingiz Word formatiga o'tkazildi!**",
+            caption="✅ **Faylingiz Word formatiga muvaffaqiyatli o'tkazildi!**",
             reply_markup=get_user_reply_keyboard(),
             parse_mode="Markdown"
         )
@@ -309,14 +308,14 @@ async def handle_pdf_to_word(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     return ConversationHandler.END
 
-# --- WORD -> PDF KONVERTATSIYASI ---
+# --- WORD -> PDF KONVERTATSIYA ISHLOVCHISI ---
 async def handle_word_to_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
     doc_name = update.message.document.file_name.lower() if update.message.document else ""
     if not update.message.document or not (doc_name.endswith('.docx') or doc_name.endswith('.doc')):
         await update.message.reply_text("❌ Iltimos, faqat `.docx` yoki `.doc` formatidagi Word fayl yuboring!")
         return CONVERT_WORD_TO_PDF
 
-    msg = await update.message.reply_text("⏳ Word fayli PDF ga o'tkazilmoqda, kuting...")
+    msg = await update.message.reply_text("⏳ Word faylingiz PDF formatiga o'tkazilmoqda, kuting...")
 
     word_file = await update.message.document.get_file()
     docx_path = f"temp_{update.effective_user.id}.docx"
@@ -325,7 +324,7 @@ async def handle_word_to_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await word_file.download_to_drive(docx_path)
 
     try:
-        # Tizimda LibreOffice orqali konvertatsiya qilish
+        # Render/Linux muhitida LibreOffice orqali konvertatsiya
         exit_code = os.system(f"soffice --headless --convert-to pdf {docx_path} --outdir .")
         temp_converted_pdf = docx_path.replace('.docx', '.pdf').replace('.doc', '.pdf')
         
@@ -334,12 +333,12 @@ async def handle_word_to_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await update.message.reply_document(
                 document=open(pdf_path, 'rb'),
                 filename=f"{update.message.document.file_name.rsplit('.', 1)[0]}.pdf",
-                caption="✅ **Faylingiz PDF formatiga o'tkazildi!**",
+                caption="✅ **Faylingiz PDF formatiga muvaffaqiyatli o'tkazildi!**",
                 reply_markup=get_user_reply_keyboard(),
                 parse_mode="Markdown"
             )
         else:
-            await update.message.reply_text("❌ Serverda LibreOffice topilmadi yoki konvertatsiya qilishda xatolik yuz berdi.")
+            await update.message.reply_text("❌ Konvertatsiya qilishda xatolik yuz berdi.")
     except Exception as e:
         await update.message.reply_text(f"❌ Faylni o'tkazishda xatolik yuz berdi: {e}")
     finally:
@@ -492,4 +491,3 @@ async def save_card_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Jarayon bekor qilindi.", reply_markup=get_user_reply_keyboard())
     return ConversationHandler.END
-                    
