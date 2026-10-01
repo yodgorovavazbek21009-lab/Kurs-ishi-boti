@@ -7,3 +7,8 @@ Flask
 gunicorn
 pdf2docx
 python-docx
+python-telegram-bot
+Flask
+gunicorn
+pdf2docx
+python-docx
