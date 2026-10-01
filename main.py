@@ -492,4 +492,4 @@ async def save_card_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Jarayon bekor qilindi.", reply_markup=get_user_reply_keyboard())
     return ConversationHandler.END
-    
+                    
