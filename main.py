@@ -235,7 +235,7 @@ async def receive_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def start_pdf_to_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="go_back_to_menu")]])
+    back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️️ Orqaga", callback_data="go_back_to_menu")]])
     await update.message.reply_text(
         "📑 **PDF -> Word rejimi:**\n\nIltimos, Word formatiga o'tkazmoqchi bo'lgan **PDF** faylingizni yuboring:",
         reply_markup=back_btn,
@@ -493,4 +493,83 @@ def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     admin_send_file_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(call
+        entry_points=[CallbackQueryHandler(callback_handler, pattern="^reply_to_")],
+        states={
+            ADMIN_SEND_FILE: [MessageHandler(filters.ALL & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), send_file_from_admin)]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        allow_reentry=True
+    )
+
+    user_reply_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(user_ask_callback, pattern="^user_ask_admin$")],
+        states={
+            USER_REPLY_STATE: [MessageHandler(filters.ALL & ~filters.COMMAND, send_user_reply_to_admin)]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        allow_reentry=True
+    )
+
+    admin_card_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(callback_handler, pattern="^change_card_start$")],
+        states={
+            SET_CARD_HOLDER: [MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), save_card_holder)],
+            SET_CARD_NUMBER: [MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), save_card_number)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        allow_reentry=True
+    )
+
+    conv_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler("start", start),
+            MessageHandler(filters.Regex("^(📚 Kurs ishi|📝 Mustaqil ish|📑 Referat / Boshqa)$"), type_selected_text),
+            MessageHandler(filters.Regex("^📑 PDF -> Word$"), start_pdf_to_word),
+            MessageHandler(filters.Regex("^📄 Word -> PDF$"), start_word_to_pdf),
+        ],
+        states={
+            SELECT_TYPE: [
+                MessageHandler(filters.Regex("^(📚 Kurs ishi|📝 Mustaqil ish|📑 Referat / Boshqa)$"), type_selected_text),
+                MessageHandler(filters.Regex("^📑 PDF -> Word$"), start_pdf_to_word),
+                MessageHandler(filters.Regex("^📄 Word -> PDF$"), start_word_to_pdf),
+            ],
+            GET_DETAILS: [
+                CallbackQueryHandler(go_back_callback, pattern="^go_back_to_menu$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_details_and_show_payment)
+            ],
+            CONFIRM_PAYMENT: [
+                MessageHandler(filters.Regex("^💳 To'lov rekvizitlari$"), show_payment_details_text),
+                MessageHandler(filters.PHOTO | filters.Document.ALL, receive_receipt)
+            ],
+            CONVERT_PDF_TO_WORD: [
+                CallbackQueryHandler(go_back_callback, pattern="^go_back_to_menu$"),
+                MessageHandler(filters.Document.ALL, handle_pdf_to_word)
+            ],
+            CONVERT_WORD_TO_PDF: [
+                CallbackQueryHandler(go_back_callback, pattern="^go_back_to_menu$"),
+                MessageHandler(filters.Document.ALL, handle_word_to_pdf)
+            ]
+        },
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CommandHandler("start", start)
+        ],
+        allow_reentry=True
+    )
+
+    app.add_handler(CommandHandler("admin", admin_command))
+    app.add_handler(conv_handler)
+    app.add_handler(admin_send_file_handler)
+    app.add_handler(user_reply_handler)
+    app.add_handler(admin_card_handler)
+    
+    app.add_handler(MessageHandler(filters.Regex("^(📦 Barcha buyurtmalar|💳 Karta sozlamasi|ℹ️ Admin haqida)$") & (filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), admin_menu_handler))
+    app.add_handler(CallbackQueryHandler(callback_handler))
+    
+    app.add_handler(MessageHandler(~filters.COMMAND & ~(filters.User(ADMIN_ID) | filters.User(username="@ttmg_2024")), handle_user_messages))
+
+    print("Bot muvaffaqiyatli ishga tushdi!")
+    app.run_polling(drop_pending_updates=True)
+
+if __name__ == "__main__":
+    main()
